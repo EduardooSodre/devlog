@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────
+   DEVLOG — Design Tokens
+   Tema escuro premium, estilo dev tool
+   ───────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    /* Backgrounds */
+    --background: 222 25% 5%;        /* #080c14 — quase preto azulado */
+    --card: 222 22% 8%;              /* #0f1420 — card surface */
+    --card-foreground: 213 31% 91%;  /* texto no card */
+
+    /* Borders */
+    --border: 220 17% 14%;           /* #1a2030 — borda sutil */
+    --input: 220 17% 12%;
+
+    /* Text */
+    --foreground: 213 31% 91%;       /* #dce7f5 — texto principal */
+    --muted: 220 15% 40%;            /* #586073 — texto secundário */
+    --muted-foreground: 220 12% 55%; /* texto muted */
+
+    /* Brand / Primary — Azul elétrico */
+    --primary: 231 90% 65%;          /* #4f6ef7 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary */
+    --secondary: 220 17% 14%;
+    --secondary-foreground: 213 31% 91%;
+
+    /* Accent — Ciano */
+    --accent: 187 85% 53%;           /* #22d3ee */
+    --accent-foreground: 222 25% 5%;
+
+    /* Cyan */
+    --cyan: 187 85% 53%;
+    --cyan-foreground: 222 25% 5%;
+
+    /* Emerald */
+    --emerald: 160 60% 45%;          /* #10b981 */
+    --emerald-foreground: 0 0% 100%;
+
+    /* Amber */
+    --amber: 38 92% 50%;             /* #f59e0b */
+
+    /* Destructive */
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Radius */
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Scrollbar customizada */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted));
+  }
+}
+
+/* ── TipTap Editor ── */
+@layer components {
+  .tiptap-editor .ProseMirror {
+    @apply min-h-[200px] outline-none;
+  }
+
+  .tiptap-editor .ProseMirror h1 {
+    @apply text-2xl font-bold mb-3 text-foreground;
+  }
+  .tiptap-editor .ProseMirror h2 {
+    @apply text-xl font-semibold mb-2 text-foreground;
+  }
+  .tiptap-editor .ProseMirror h3 {
+    @apply text-lg font-semibold mb-2 text-foreground;
+  }
+  .tiptap-editor .ProseMirror p {
+    @apply mb-3 text-foreground/80 leading-relaxed;
+  }
+  .tiptap-editor .ProseMirror ul,
+  .tiptap-editor .ProseMirror ol {
+    @apply mb-3 pl-5;
+  }
+  .tiptap-editor .ProseMirror li {
+    @apply mb-1 text-foreground/80;
+  }
+  .tiptap-editor .ProseMirror code {
+    @apply font-mono text-sm bg-primary/10 text-primary px-1.5 py-0.5 rounded;
+  }
+  .tiptap-editor .ProseMirror pre {
+    @apply font-mono text-sm bg-card border border-border rounded-lg p-4 mb-3 overflow-x-auto;
+  }
+  .tiptap-editor .ProseMirror blockquote {
+    @apply border-l-2 border-primary pl-4 italic text-muted-foreground mb-3;
+  }
+  .tiptap-editor .ProseMirror hr {
+    @apply border-border my-4;
+  }
+  .tiptap-editor .ProseMirror img {
+    @apply rounded-lg max-w-full mb-3;
+  }
+  .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    @apply text-muted-foreground pointer-events-none float-left h-0;
+  }
+}
+
+/* ── Glassmorphism ── */
+@layer utilities {
+  .glass {
+    @apply bg-card/60 backdrop-blur-md border border-border/60;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.2);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px hsl(var(--cyan) / 0.2);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+
+  .noise-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+}
