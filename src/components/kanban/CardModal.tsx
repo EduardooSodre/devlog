@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   X, CheckCircle2, Clock, Flag, Calendar, Paperclip,
-  MessageSquare, Loader2, ChevronDown, Upload, Trash2,
+  MessageSquare, Loader2, ChevronDown, Upload, Trash2, Pencil,
 } from "lucide-react";
-import { cn, priorityConfig, formatDateTime } from "@/lib/utils";
+import { cn, priorityConfig, formatDateTime, isHtml, sanitizeHtml } from "@/lib/utils";
 import type { KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 
@@ -29,6 +29,8 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
   const [tab, setTab] = useState<"details" | "attachments" | "completion">("details");
   const [attachments, setAttachments] = useState(card.attachments ?? []);
   const [uploading, setUploading] = useState(false);
+  // Começa em modo de leitura quando já existe descrição; em edição quando está vazia.
+  const [editingDesc, setEditingDesc] = useState(!card.description);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -87,6 +89,7 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
       const { data } = await res.json();
       if (!res.ok) throw new Error();
       onUpdate({ ...card, ...data, attachments });
+      if (description) setEditingDesc(false);
       toast.success("Card salvo!");
     } catch {
       toast.error("Erro ao salvar card");
@@ -230,16 +233,41 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
 
               {/* Description */}
               <div>
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                  Descrição
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descreva a tarefa…"
-                  rows={6}
-                  className="w-full bg-background border border-border rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/60"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block">
+                    Descrição
+                  </label>
+                  {!editingDesc && description && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingDesc(true)}
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Editar
+                    </button>
+                  )}
+                </div>
+
+                {editingDesc ? (
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descreva a tarefa…"
+                    rows={6}
+                    autoFocus
+                    className="w-full bg-background border border-border rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/60"
+                  />
+                ) : isHtml(description) ? (
+                  <div
+                    className="prose prose-invert prose-sm max-w-none text-foreground/80 leading-relaxed text-sm bg-background border border-border rounded-xl p-3 overflow-hidden break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:break-words [&_a]:break-all [&_img]:max-w-full [&_table]:block [&_table]:overflow-x-auto"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap text-foreground/80 leading-relaxed text-sm bg-background border border-border rounded-xl p-3">
+                    {description}
+                  </div>
+                )}
               </div>
 
               {/* Due date (display only — add date picker if needed) */}

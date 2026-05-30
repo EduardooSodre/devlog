@@ -8,6 +8,7 @@ import { cn, priorityConfig, formatDate } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
 import { DueDateAlerts } from "./DueDateAlerts";
+import { BoardCanvas } from "./BoardCanvas";
 
 interface Props {
   initialBoards: KanbanBoardWithColumns[];
@@ -417,7 +418,8 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         </div>
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-6 p-6 overflow-x-auto h-full items-start no-scrollbar">
+          <BoardCanvas>
+          <div className="flex gap-6 p-6 h-full items-stretch w-max">
             {activeBoard.columns.map((column) => (
               <KanbanColumn
                 key={column.id}
@@ -478,6 +480,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
               )}
             </div>
           </div>
+          </BoardCanvas>
         </DragDropContext>
       )}
 
@@ -525,9 +528,9 @@ function KanbanColumn({
   const doneCount = cards.filter((c) => c.status === "done").length;
 
   return (
-    <div className="flex flex-col w-72 shrink-0">
+    <div className="flex flex-col w-72 shrink-0 h-full max-h-full">
       {/* Column header */}
-      <div className="flex items-center justify-between mb-3 px-1">
+      <div className="flex items-center justify-between mb-3 px-1 shrink-0">
         <div className="flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full"
@@ -578,7 +581,7 @@ function KanbanColumn({
 
       {/* Progress bar */}
       {cards.length > 0 && (
-        <div className="h-1 rounded-full bg-border mb-3 overflow-hidden">
+        <div className="h-1 rounded-full bg-border mb-3 overflow-hidden shrink-0">
           <div
             className="h-full rounded-full bg-emerald-400 transition-all duration-500"
             style={{ width: `${(doneCount / cards.length) * 100}%` }}
@@ -592,8 +595,9 @@ function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
+            data-col-scroll
             className={cn(
-              "flex flex-col gap-2 min-h-[4rem] p-2 rounded-xl transition-colors",
+              "flex flex-col gap-2 min-h-[4rem] flex-1 overflow-y-auto no-scrollbar p-2 rounded-xl transition-colors",
               snapshot.isDraggingOver ? "bg-primary/5 border border-primary/20" : "bg-card/30"
             )}
           >
@@ -706,7 +710,7 @@ function KanbanColumn({
       {!addingCard && (
         <button
           onClick={onStartAdd}
-          className="flex items-center gap-2 mt-2 px-2 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-card transition-colors"
+          className="flex items-center gap-2 mt-2 px-2 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-card transition-colors shrink-0"
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar card
         </button>

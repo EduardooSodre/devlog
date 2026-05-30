@@ -130,6 +130,15 @@
 
 /* ── Glassmorphism ── */
 @layer utilities {
+  /* Esconde a barra de scroll mantendo a rolagem funcional (usado no canvas do Kanban) */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .glass {
     @apply bg-card/60 backdrop-blur-md border border-border/60;
   }

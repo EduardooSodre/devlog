@@ -50,6 +50,26 @@ export function initials(name: string): string {
     .toUpperCase();
 }
 
+// ── HTML utils ──
+/** Detecta se uma string contém marcação HTML (ex.: descrições vindas de editores rich-text). */
+export function isHtml(str: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(str);
+}
+
+/**
+ * Sanitização leve e sem dependências para HTML de fontes potencialmente externas.
+ * Remove scripts, iframes, handlers inline (on*) e URLs javascript:.
+ * Não substitui uma lib completa (ex.: DOMPurify), mas cobre os vetores comuns de XSS
+ * para o conteúdo de descrição/conclusão renderizado via dangerouslySetInnerHTML.
+ */
+export function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+    .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|javascript:[^\s>]+)/gi, "$1=\"#\"");
+}
+
 // ── File utils ──
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
