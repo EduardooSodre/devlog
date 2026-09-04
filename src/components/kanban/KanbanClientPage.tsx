@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare } from "lucide-react";
+import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff } from "lucide-react";
 import { cn, priorityConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
@@ -57,6 +58,30 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [newColumnName, setNewColumnName] = useState("");
   const [showBoardSettings, setShowBoardSettings] = useState(false);
   const [view, setView] = useState<ViewId>("board");
+  const [filterMine, setFilterMine] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(true);
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
+
+  // "Minhas tarefas" se aplica em qualquer view; "Ocultar concluídas" só nas views de
+  // planejamento (lista/cronograma/calendário) — no Painel a coluna Concluído é o
+  // lugar natural de ver o que já foi feito, então esconder lá tiraria a função do board.
+  const filteredColumns = useMemo(() => {
+    if (!activeBoard) return [];
+    return activeBoard.columns.map((col) => ({
+      ...col,
+      cards: (col.cards ?? []).filter((c) => !filterMine || c.assignedToId === currentUserId),
+    }));
+  }, [activeBoard, filterMine, currentUserId]);
+
+  const planningColumns = useMemo(
+    () =>
+      filteredColumns.map((col) => ({
+        ...col,
+        cards: (col.cards ?? []).filter((c) => !hideCompleted || c.status !== "done"),
+      })),
+    [filteredColumns, hideCompleted]
+  );
 
   // ── Create board ──
   async function handleCreateBoard() {
@@ -181,26 +206,25 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   );
 
   // ── Update card from modal ──
+  // Substitui o card em qualquer coluna onde ele esteja e, se columnId mudou (ex.:
+  // completar a tarefa move pra "Concluído" automaticamente), realoca pra coluna certa
+  // em vez de deixar uma cópia desatualizada parada na coluna antiga.
+  function relocateCard(columns: KanbanColumnWithCards[], updated: KanbanCardWithDetails) {
+    const stripped = columns.map((col) => ({
+      ...col,
+      cards: (col.cards ?? []).filter((c) => c.id !== updated.id),
+    }));
+    return stripped.map((col) =>
+      col.id === updated.columnId ? { ...col, cards: [...(col.cards ?? []), updated] } : col
+    );
+  }
+
   function handleCardUpdate(updated: KanbanCardWithDetails) {
     setBoards((prev) =>
-      prev.map((b) => ({
-        ...b,
-        columns: b.columns.map((col) => ({
-          ...col,
-          cards: (col.cards ?? []).map((c) => (c.id === updated.id ? updated : c)),
-        })),
-      }))
+      prev.map((b) => (b.id === updated.boardId ? { ...b, columns: relocateCard(b.columns, updated) } : b))
     );
     setActiveBoard((prev) =>
-      prev
-        ? {
-            ...prev,
-            columns: prev.columns.map((col) => ({
-              ...col,
-              cards: (col.cards ?? []).map((c) => (c.id === updated.id ? updated : c)),
-            })),
-          }
-        : prev
+      prev && prev.id === updated.boardId ? { ...prev, columns: relocateCard(prev.columns, updated) } : prev
     );
     setSelectedCard(updated);
   }
@@ -454,6 +478,37 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         )}
       </div>
 
+      {activeBoard && view !== "board" && (
+        <div className="flex items-center gap-2 px-6 pb-3 -mt-2">
+          <button
+            onClick={() => setFilterMine((v) => !v)}
+            className={cn(
+              "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+              filterMine
+                ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                : "border-border text-muted-foreground hover:border-primary/30"
+            )}
+          >
+            <UserCircle2 className="w-3.5 h-3.5" />
+            Minhas tarefas
+          </button>
+          {(view === "list" || view === "timeline" || view === "calendar") && (
+            <button
+              onClick={() => setHideCompleted((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+                hideCompleted
+                  ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                  : "border-border text-muted-foreground hover:border-primary/30"
+              )}
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              Ocultar concluídas
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ── Board ── */}
       {!activeBoard ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
@@ -474,15 +529,15 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
           </button>
         </div>
       ) : view === "list" ? (
-        <ListView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+        <ListView columns={planningColumns} onCardClick={setSelectedCard} />
       ) : view === "timeline" ? (
-        <TimelineView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+        <TimelineView columns={planningColumns} onCardClick={setSelectedCard} />
       ) : view === "calendar" ? (
-        <CalendarView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+        <CalendarView columns={planningColumns} onCardClick={setSelectedCard} />
       ) : view === "messages" ? (
-        <MessagesView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+        <MessagesView columns={filteredColumns} onCardClick={setSelectedCard} />
       ) : view === "files" ? (
-        <FilesView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+        <FilesView columns={filteredColumns} onCardClick={setSelectedCard} />
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
           <BoardCanvas>

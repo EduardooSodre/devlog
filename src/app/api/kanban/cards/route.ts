@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { kanbanCards, kanbanBoards } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { kanbanCards, kanbanBoards, kanbanColumns } from "@/lib/db/schema";
+import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { sendPushToUser } from "@/lib/push";
 import { canAccessBoard } from "@/lib/workspace";
@@ -56,6 +56,19 @@ const updateCardSchema = z.object({
   completedAt: z.string().optional().nullable(),
   assignedToId: z.string().optional().nullable(),
 });
+
+/** Acha a coluna "Concluído" do board (por nome, com fallback pra última coluna) —
+ * usada pra mover o card automaticamente ao marcar como feito. */
+async function findDoneColumnId(boardId: string): Promise<string | undefined> {
+  const columns = await db
+    .select({ id: kanbanColumns.id, name: kanbanColumns.name })
+    .from(kanbanColumns)
+    .where(eq(kanbanColumns.boardId, boardId))
+    .orderBy(asc(kanbanColumns.order));
+  if (columns.length === 0) return undefined;
+  const done = columns.find((c) => /conclu[ií]d|done|finaliz/i.test(c.name));
+  return (done ?? columns[columns.length - 1]).id;
+}
 
 /** Notifica o novo responsável por push, quando a atribuição muda para outra pessoa. */
 async function notifyAssignee(cardId: string, cardTitle: string, boardId: string, assignedToId: string, actorId: string) {
@@ -158,12 +171,20 @@ export async function PATCH(req: NextRequest) {
     if (updates.assignedToId !== undefined) updateData.assignedToId = updates.assignedToId;
     if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? parseDateOnly(updates.dueDate) : null;
 
-    // Ao concluir o card
     if (updates.status === "done" && !updates.completedAt) {
       updateData.completedAt = new Date();
     }
     if (updates.completedAt) {
       updateData.completedAt = updates.completedAt ? new Date(updates.completedAt) : null;
+    }
+
+    // Ao concluir o card: mover pra coluna "Concluído" automaticamente, a menos que o
+    // cliente já tenha pedido uma coluna específica (ex.: drag-and-drop manual).
+    if (updates.status === "done" && !updates.columnId) {
+      const doneColumnId = await findDoneColumnId(existing.boardId);
+      if (doneColumnId && doneColumnId !== existing.columnId) {
+        updateData.columnId = doneColumnId;
+      }
     }
 
     updateData.updatedAt = new Date();
