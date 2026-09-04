@@ -8,9 +8,11 @@ interface BillingActionsProps {
   workspaceId: string;
   isPro: boolean;
   variant?: "inline" | "cta";
+  plan?: "pro" | "enterprise";
+  label?: string;
 }
 
-export function BillingActions({ workspaceId, isPro, variant = "cta" }: BillingActionsProps) {
+export function BillingActions({ workspaceId, isPro, variant = "cta", plan = "pro", label }: BillingActionsProps) {
   const [loading, setLoading] = useState(false);
 
   async function handleUpgrade() {
@@ -19,7 +21,7 @@ export function BillingActions({ workspaceId, isPro, variant = "cta" }: BillingA
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
+        body: JSON.stringify({ workspaceId, plan }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro ao iniciar checkout");
@@ -67,7 +69,7 @@ export function BillingActions({ workspaceId, isPro, variant = "cta" }: BillingA
   return (
     <button type="button" onClick={handleUpgrade} disabled={loading} className={className}>
       {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-      {variant === "inline" ? "Fazer upgrade" : "Fazer upgrade agora"}
+      {label ?? (variant === "inline" ? "Fazer upgrade" : "Fazer upgrade agora")}
     </button>
   );
 }

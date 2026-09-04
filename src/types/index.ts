@@ -48,7 +48,7 @@ export type KanbanBoardWithColumns = KanbanBoard & {
 
 export type KanbanCardWithDetails = KanbanCard & {
   attachments?: CardAttachment[];
-  comments?: CardComment[];
+  comments?: (CardComment & { author?: Pick<User, "id" | "name" | "image"> })[];
   tags?: Tag[];
   assignedTo?: Pick<User, "id" | "name" | "image"> | null;
   createdBy?: Pick<User, "id" | "name" | "image">;

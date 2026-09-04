@@ -53,6 +53,40 @@
     /* Radius */
     --radius: 0.625rem;
   }
+
+  /* ── Tema claro ── */
+  .light {
+    --background: 220 25% 98%;      /* branco levemente azulado */
+    --card: 0 0% 100%;
+    --card-foreground: 222 30% 14%;
+
+    --border: 220 16% 89%;
+    --input: 220 16% 89%;
+
+    --foreground: 222 30% 14%;
+    --muted: 220 16% 93%;
+    --muted-foreground: 220 10% 42%;
+
+    --primary: 231 80% 56%;         /* mesmo azul, um pouco mais escuro p/ contraste no branco */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 16% 93%;
+    --secondary-foreground: 222 30% 14%;
+
+    --accent: 190 80% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --cyan: 190 80% 36%;
+    --cyan-foreground: 0 0% 100%;
+
+    --emerald: 160 70% 32%;
+    --emerald-foreground: 0 0% 100%;
+
+    --amber: 32 90% 42%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {

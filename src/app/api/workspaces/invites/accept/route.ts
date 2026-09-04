@@ -52,6 +52,9 @@ export async function POST(req: Request) {
         userId: session.user.id,
         role: invite.role,
       });
+      // Cobrança por assento (R$30/funcionário) acompanha o time automaticamente.
+      const { syncSeatQuantity } = await import("@/lib/stripe");
+      await syncSeatQuantity(invite.workspaceId);
     }
 
     await db

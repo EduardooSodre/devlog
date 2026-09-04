@@ -127,6 +127,11 @@ export const workspaces = pgTable("workspaces", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   plan: planEnum("plan").notNull().default("free"),
+  // Domínio de e-mail corporativo "dono" deste workspace (null = workspace pessoal).
+  // Novos cadastros com e-mail do mesmo domínio entram automaticamente aqui.
+  domain: text("domain").unique(),
+  // Fim do trial gratuito de 30 dias para workspaces vinculados a domínio. Null = sem trial.
+  trialEndsAt: timestamp("trial_ends_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -208,6 +213,41 @@ export const subscriptions = pgTable("subscriptions", {
 });
 
 // ─────────────────────────────────────────────
+// DEPARTAMENTOS
+// Qualquer membro do workspace pode criar um e escolher quem enxerga — não é uma
+// hierarquia fixa, é um grupo de visibilidade que o criador monta na hora.
+// ─────────────────────────────────────────────
+
+export const departments = pgTable("departments", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  workspaceId: text("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdById: text("created_by_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const departmentMembers = pgTable(
+  "department_members",
+  {
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => departments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.departmentId, table.userId] }),
+  })
+);
+
+// ─────────────────────────────────────────────
 // KANBAN
 // ─────────────────────────────────────────────
 
@@ -218,6 +258,9 @@ export const kanbanBoards = pgTable("kanban_boards", {
   workspaceId: text("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Board sem departamento = visível para o workspace inteiro (comportamento de sempre).
+  // Com departamento = só quem está em departmentMembers enxerga.
+  departmentId: text("department_id").references(() => departments.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").default("#4f6ef7"), // cor do board
@@ -390,6 +433,32 @@ export const entryTags = pgTable(
   })
 );
 
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("push_sub_user_idx").on(table.userId),
+  })
+);
+
+export const pushSubscriptionsRelations = relations(pushSubscriptions, ({ one }) => ({
+  user: one(users, {
+    fields: [pushSubscriptions.userId],
+    references: [users.id],
+  }),
+}));
+
 export const cardTags = pgTable(
   "card_tags",
   {
@@ -426,6 +495,19 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   docEntries: many(docEntries),
   tags: many(tags),
   subscription: one(subscriptions),
+  departments: many(departments),
+}));
+
+export const departmentsRelations = relations(departments, ({ one, many }) => ({
+  workspace: one(workspaces, { fields: [departments.workspaceId], references: [workspaces.id] }),
+  createdBy: one(users, { fields: [departments.createdById], references: [users.id] }),
+  members: many(departmentMembers),
+  boards: many(kanbanBoards),
+}));
+
+export const departmentMembersRelations = relations(departmentMembers, ({ one }) => ({
+  department: one(departments, { fields: [departmentMembers.departmentId], references: [departments.id] }),
+  user: one(users, { fields: [departmentMembers.userId], references: [users.id] }),
 }));
 
 export const workspaceInvitesRelations = relations(workspaceInvites, ({ one }) => ({
@@ -443,6 +525,10 @@ export const kanbanBoardsRelations = relations(kanbanBoards, ({ one, many }) => 
   workspace: one(workspaces, {
     fields: [kanbanBoards.workspaceId],
     references: [workspaces.id],
+  }),
+  department: one(departments, {
+    fields: [kanbanBoards.departmentId],
+    references: [departments.id],
   }),
   columns: many(kanbanColumns),
   cards: many(kanbanCards),

@@ -30,7 +30,7 @@ export async function POST() {
         ctx.workspace.name
       ));
 
-    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const baseUrl = process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
     const portal = await createBillingPortalSession(
       customerId,
       `${baseUrl}/settings/billing`

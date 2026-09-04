@@ -3,15 +3,25 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  X, CheckCircle2, Clock, Flag, Calendar, Paperclip,
-  MessageSquare, Loader2, ChevronDown, Upload, Trash2, Pencil,
+  X, CheckCircle2, Clock, Flag, Paperclip,
+  MessageSquare, Loader2, ChevronDown, Upload, Trash2,
 } from "lucide-react";
-import { cn, priorityConfig, formatDateTime, isHtml, sanitizeHtml } from "@/lib/utils";
+import { cn, priorityConfig, formatDateTime, initials } from "@/lib/utils";
 import type { KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { AssigneeSelect } from "./AssigneeSelect";
+import { TipTapEditor } from "@/components/docs/TipTapEditor";
+
+interface WorkspaceMember {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
 
 interface Props {
   card: KanbanCardWithDetails;
+  workspaceId: string;
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
   onDelete: (cardId: string) => void;
@@ -19,18 +29,40 @@ interface Props {
 
 const priorities = ["low", "medium", "high", "urgent"] as const;
 
-export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
+function toDateInputValue(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  const d = typeof date === "string" ? new Date(date) : date;
+  // Extrai o dia LOCAL (não UTC) — importante porque o servidor agora grava o prazo
+  // como meia-noite local; usar toISOString() aqui reintroduziria o bug do fuso horário.
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Props) {
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
+  const [dueDate, setDueDate] = useState(toDateInputValue(card.dueDate));
+  const [assignedToId, setAssignedToId] = useState(card.assignedToId ?? "");
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [completionNotes, setCompletionNotes] = useState(card.completionNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
-  const [tab, setTab] = useState<"details" | "attachments" | "completion">("details");
+  const [tab, setTab] = useState<"details" | "attachments" | "comments" | "completion">("details");
   const [attachments, setAttachments] = useState(card.attachments ?? []);
+  const [comments, setComments] = useState(card.comments ?? []);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
   const [uploading, setUploading] = useState(false);
-  // Começa em modo de leitura quando já existe descrição; em edição quando está vazia.
-  const [editingDesc, setEditingDesc] = useState(!card.description);
+
+  useEffect(() => {
+    fetch(`/api/workspaces/members?workspaceId=${workspaceId}`)
+      .then((res) => res.json())
+      .then((json) => setMembers(json.data ?? []))
+      .catch(() => {});
+  }, [workspaceId]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -84,12 +116,19 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
       const res = await fetch("/api/kanban/cards", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: card.id, title, description, priority }),
+        body: JSON.stringify({
+          id: card.id,
+          title,
+          description,
+          priority,
+          dueDate: dueDate || null,
+          assignedToId: assignedToId || null,
+        }),
       });
       const { data } = await res.json();
       if (!res.ok) throw new Error();
-      onUpdate({ ...card, ...data, attachments });
-      if (description) setEditingDesc(false);
+      const assignedTo = members.find((m) => m.id === assignedToId) ?? null;
+      onUpdate({ ...card, ...data, attachments, comments, assignedTo });
       toast.success("Card salvo!");
     } catch {
       toast.error("Erro ao salvar card");
@@ -113,7 +152,7 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
       });
       const { data } = await res.json();
       if (!res.ok) throw new Error();
-      onUpdate({ ...card, ...data, attachments });
+      onUpdate({ ...card, ...data, attachments, comments });
       toast.success(isDone ? "Card reaberto!" : "Card concluído! 🎉");
     } catch {
       toast.error("Erro ao atualizar status");
@@ -137,6 +176,26 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
   }
 
   // handleFileUpload removido (substituído pelo Cloudinary widget)
+
+  async function handlePostComment() {
+    if (!newComment.trim()) return;
+    setPostingComment(true);
+    try {
+      const res = await fetch("/api/kanban/cards/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: card.id, content: newComment.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      const { data } = await res.json();
+      setComments((prev) => [...prev, data]);
+      setNewComment("");
+    } catch {
+      toast.error("Erro ao enviar comentário");
+    } finally {
+      setPostingComment(false);
+    }
+  }
 
   return (
     <>
@@ -184,7 +243,7 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
 
         {/* Tabs */}
         <div className="flex border-b border-border px-5">
-          {(["details", "attachments", "completion"] as const).map((t) => (
+          {(["details", "attachments", "comments", "completion"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -197,6 +256,7 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
             >
               {t === "details" && "Detalhes"}
               {t === "attachments" && "Anexos"}
+              {t === "comments" && `Comentários${comments.length ? ` (${comments.length})` : ""}`}
               {t === "completion" && "Conclusão"}
             </button>
           ))}
@@ -231,52 +291,40 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
                 </div>
               </div>
 
-              {/* Description */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block">
-                    Descrição
+              {/* Responsável + Prazo */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                    Responsável
                   </label>
-                  {!editingDesc && description && (
-                    <button
-                      type="button"
-                      onClick={() => setEditingDesc(true)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Editar
-                    </button>
-                  )}
+                  <AssigneeSelect members={members} value={assignedToId} onChange={setAssignedToId} />
                 </div>
-
-                {editingDesc ? (
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descreva a tarefa…"
-                    rows={6}
-                    autoFocus
-                    className="w-full bg-background border border-border rounded-xl p-3 text-sm resize-none focus:outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/60"
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                    Prazo
+                  </label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full h-9 bg-background border border-border rounded-lg px-2 text-sm focus:outline-none focus:border-primary transition-colors"
                   />
-                ) : isHtml(description) ? (
-                  <div
-                    className="prose prose-invert prose-sm max-w-none text-foreground/80 leading-relaxed text-sm bg-background border border-border rounded-xl p-3 overflow-hidden break-words [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_code]:break-words [&_a]:break-all [&_img]:max-w-full [&_table]:block [&_table]:overflow-x-auto"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
-                  />
-                ) : (
-                  <div className="whitespace-pre-wrap text-foreground/80 leading-relaxed text-sm bg-background border border-border rounded-xl p-3">
-                    {description}
-                  </div>
-                )}
+                </div>
               </div>
 
-              {/* Due date (display only — add date picker if needed) */}
-              {card.dueDate && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  Prazo: {formatDateTime(card.dueDate)}
-                </div>
-              )}
+              {/* Description */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Descrição
+                </label>
+                <TipTapEditor
+                  content={description}
+                  onChange={setDescription}
+                  placeholder="Descreva a tarefa…"
+                  className="text-sm [&_.ProseMirror]:min-h-[120px] [&_.ProseMirror]:py-2.5"
+                />
+              </div>
+
             </div>
           )}
 
@@ -354,6 +402,61 @@ export function CardModal({ card, onClose, onUpdate, onDelete }: Props) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Comments tab ── */}
+          {tab === "comments" && (
+            <div className="flex flex-col h-full">
+              <div className="space-y-4 mb-4">
+                {comments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum comentário ainda. Comece a conversa.
+                  </p>
+                ) : (
+                  comments.map((c) => (
+                    <div key={c.id} className="flex gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center overflow-hidden shrink-0">
+                        {c.author?.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.author.image} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          initials(c.author?.name || "?")
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium">{c.author?.name ?? "Alguém"}</span>
+                          <span className="text-[11px] text-muted-foreground">{formatDateTime(c.createdAt)}</span>
+                        </div>
+                        <p className="text-sm text-foreground/90 whitespace-pre-wrap mt-0.5">{c.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-auto flex gap-2 pt-3 border-t border-border">
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handlePostComment();
+                    }
+                  }}
+                  placeholder="Escreva um comentário…"
+                  rows={2}
+                  className="flex-1 bg-background border border-border rounded-xl p-2.5 text-sm resize-none focus:outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/60"
+                />
+                <button
+                  onClick={handlePostComment}
+                  disabled={postingComment || !newComment.trim()}
+                  className="flex items-center gap-1.5 bg-primary text-white text-xs px-3 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0"
+                >
+                  {postingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
           )}
 

@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const workspaceId = session.metadata?.workspaceId;
+        const plan = session.metadata?.plan === "enterprise" ? "enterprise" : "pro";
         if (!workspaceId) break;
 
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
 
         await db
           .update(workspaces)
-          .set({ plan: "pro" })
+          .set({ plan })
           .where(eq(workspaces.id, workspaceId));
         break;
       }

@@ -1,14 +1,30 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown } from "lucide-react";
-import { cn, priorityConfig, formatDate } from "@/lib/utils";
+import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare } from "lucide-react";
+import { cn, priorityConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
 import { DueDateAlerts } from "./DueDateAlerts";
 import { BoardCanvas } from "./BoardCanvas";
+import { ListView } from "./ListView";
+import { CalendarView } from "./CalendarView";
+import { FilesView } from "./FilesView";
+import { TimelineView } from "./TimelineView";
+import { MessagesView } from "./MessagesView";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+const VIEWS = [
+  { id: "board", label: "Painel", icon: LayoutGrid },
+  { id: "list", label: "Lista", icon: ListIcon },
+  { id: "timeline", label: "Cronograma", icon: GanttChartSquare },
+  { id: "calendar", label: "Calendário", icon: CalendarDays },
+  { id: "messages", label: "Mensagens", icon: MessageSquare },
+  { id: "files", label: "Arquivos", icon: Paperclip },
+] as const;
+type ViewId = (typeof VIEWS)[number]["id"];
 
 interface Props {
   initialBoards: KanbanBoardWithColumns[];
@@ -23,6 +39,15 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [selectedCard, setSelectedCard] = useState<KanbanCardWithDetails | null>(null);
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
+  const [newBoardDepartmentId, setNewBoardDepartmentId] = useState("");
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch(`/api/workspaces/departments?workspaceId=${workspaceId}`)
+      .then((res) => res.json())
+      .then((json) => setDepartments(json.data ?? []))
+      .catch(() => {});
+  }, [workspaceId]);
   const [addingCardToColumn, setAddingCardToColumn] = useState<string | null>(null);
   const [newCardTitle, setNewCardTitle] = useState("");
   const [loadingCard, setLoadingCard] = useState(false);
@@ -31,6 +56,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [showBoardSettings, setShowBoardSettings] = useState(false);
+  const [view, setView] = useState<ViewId>("board");
 
   // ── Create board ──
   async function handleCreateBoard() {
@@ -39,7 +65,11 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       const res = await fetch("/api/kanban/boards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newBoardName.trim(), workspaceId }),
+        body: JSON.stringify({
+          name: newBoardName.trim(),
+          workspaceId,
+          departmentId: newBoardDepartmentId || undefined,
+        }),
       });
       const { data } = await res.json();
       if (!res.ok) throw new Error();
@@ -47,6 +77,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       setBoards((b) => [newBoard, ...b]);
       setActiveBoard(newBoard);
       setNewBoardName("");
+      setNewBoardDepartmentId("");
       setCreatingBoard(false);
       toast.success("Board criado!");
     } catch {
@@ -102,6 +133,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       );
       setNewCardTitle("");
       setAddingCardToColumn(null);
+      setSelectedCard(data); // abre o dialog para completar detalhes, anexos e responsável
       toast.success("Card criado!");
     } catch {
       toast.error("Erro ao criar card");
@@ -334,6 +366,19 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                   placeholder="Nome do board…"
                   className="h-8 px-3 bg-card border border-border rounded-lg text-sm focus:outline-none focus:border-primary w-40"
                 />
+                {departments.length > 0 && (
+                  <select
+                    value={newBoardDepartmentId}
+                    onChange={(e) => setNewBoardDepartmentId(e.target.value)}
+                    title="Restringir a um departamento"
+                    className="h-8 px-2 bg-card border border-border rounded-lg text-xs text-muted-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Todo o workspace</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={handleCreateBoard}
                   className="text-xs text-primary font-medium hover:underline"
@@ -356,6 +401,17 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         </div>
 
         {activeBoard && (
+          <div className="flex items-center gap-2">
+            <Tabs value={view} onValueChange={(v) => setView(v as ViewId)}>
+              <TabsList>
+                {VIEWS.map(({ id, label, icon: Icon }) => (
+                  <TabsTrigger key={id} value={id} title={label}>
+                    <Icon className="w-3.5 h-3.5" />
+                    <span className="hidden lg:inline">{label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
           <div className="relative">
             <button
               onClick={() => setShowBoardSettings(!showBoardSettings)}
@@ -394,6 +450,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
               </>
             )}
           </div>
+          </div>
         )}
       </div>
 
@@ -416,6 +473,16 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
             <Plus className="w-4 h-4" /> Criar primeiro board
           </button>
         </div>
+      ) : view === "list" ? (
+        <ListView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+      ) : view === "timeline" ? (
+        <TimelineView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+      ) : view === "calendar" ? (
+        <CalendarView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+      ) : view === "messages" ? (
+        <MessagesView columns={activeBoard.columns} onCardClick={setSelectedCard} />
+      ) : view === "files" ? (
+        <FilesView columns={activeBoard.columns} onCardClick={setSelectedCard} />
       ) : (
         <DragDropContext onDragEnd={onDragEnd}>
           <BoardCanvas>
@@ -488,6 +555,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       {selectedCard && (
         <CardModal
           card={selectedCard}
+          workspaceId={workspaceId}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
           onDelete={handleCardDelete}
@@ -659,6 +727,19 @@ function KanbanColumn({
                           </span>
                         )}
                       </div>
+                      {card.assignedTo && (
+                        <div
+                          title={card.assignedTo.name ?? undefined}
+                          className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center overflow-hidden shrink-0"
+                        >
+                          {card.assignedTo.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={card.assignedTo.image} alt={card.assignedTo.name ?? ""} className="w-full h-full object-cover" />
+                          ) : (
+                            initials(card.assignedTo.name || "?")
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

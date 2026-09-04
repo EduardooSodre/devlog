@@ -7,9 +7,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { kanbanCards } from "@/lib/db/schema";
+import { kanbanCards, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { sendPushToUser } from "@/lib/push";
+import { verifyWorkspaceAccess } from "@/lib/workspace";
+
+/**
+ * Converte uma data "YYYY-MM-DD" (vinda do <input type="date">) em meia-noite LOCAL,
+ * não UTC. `new Date("2026-09-04")` é sempre meia-noite UTC pela spec do JS — num fuso
+ * atrás de UTC (ex.: Brasil) isso volta pro dia anterior ao formatar com hora local em
+ * qualquer lugar do app (calendário, cronograma, etc.), fazendo o prazo "errar o dia".
+ */
+function parseDateOnly(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+/** Confirma que o usuário é membro do workspace dono do board — sem isso, qualquer
+ * usuário autenticado poderia criar/editar/excluir cards de outros workspaces só
+ * sabendo (ou adivinhando) o id. */
+async function assertBoardAccess(userId: string, boardId: string) {
+  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
+  if (!board) return false;
+  return !!(await verifyWorkspaceAccess(userId, board.workspaceId));
+}
 
 const createCardSchema = z.object({
   title: z.string().min(1).max(200),
@@ -19,6 +40,7 @@ const createCardSchema = z.object({
   columnId: z.string(),
   boardId: z.string(),
   order: z.number().default(0),
+  assignedToId: z.string().optional().nullable(),
 });
 
 const updateCardSchema = z.object({
@@ -32,7 +54,19 @@ const updateCardSchema = z.object({
   dueDate: z.string().optional().nullable(),
   completionNotes: z.string().optional(),
   completedAt: z.string().optional().nullable(),
+  assignedToId: z.string().optional().nullable(),
 });
+
+/** Notifica o novo responsável por push, quando a atribuição muda para outra pessoa. */
+async function notifyAssignee(cardId: string, cardTitle: string, boardId: string, assignedToId: string, actorId: string) {
+  if (assignedToId === actorId) return; // não notifica quem atribuiu a si mesmo
+  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
+  await sendPushToUser(assignedToId, {
+    title: "Nova tarefa atribuída a você",
+    body: cardTitle,
+    url: board ? `/projetos?board=${board.id}&card=${cardId}` : "/projetos",
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,7 +81,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { title, description, priority, dueDate, columnId, boardId, order } = parsed.data;
+    const { title, description, priority, dueDate, columnId, boardId, order, assignedToId } = parsed.data;
+
+    if (!(await assertBoardAccess(session.user.id, boardId))) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
 
     const [card] = await db
       .insert(kanbanCards)
@@ -55,13 +93,18 @@ export async function POST(req: NextRequest) {
         title,
         description,
         priority,
-        dueDate: dueDate ? new Date(dueDate) : undefined,
+        dueDate: dueDate ? parseDateOnly(dueDate) : undefined,
         columnId,
         boardId,
         order,
+        assignedToId: assignedToId ?? undefined,
         createdById: session.user.id,
       })
       .returning();
+
+    if (assignedToId) {
+      await notifyAssignee(card.id, card.title, boardId, assignedToId, session.user.id);
+    }
 
     return NextResponse.json({ success: true, data: card }, { status: 201 });
   } catch (error) {
@@ -85,6 +128,23 @@ export async function PATCH(req: NextRequest) {
 
     const { id, ...updates } = parsed.data;
 
+    const existing = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, id) });
+    if (!existing) {
+      return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
+    }
+
+    if (!(await assertBoardAccess(session.user.id, existing.boardId))) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+
+    // Se estiver movendo o card para outro board, confere acesso ao destino também
+    if (updates.columnId) {
+      const destColumn = await db.query.kanbanColumns.findFirst({ where: (c, { eq }) => eq(c.id, updates.columnId!) });
+      if (!destColumn || !(await assertBoardAccess(session.user.id, destColumn.boardId))) {
+        return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      }
+    }
+
     // Prepara dados para update
     const updateData: Partial<typeof kanbanCards.$inferInsert> = {};
 
@@ -95,6 +155,8 @@ export async function PATCH(req: NextRequest) {
     if (updates.columnId) updateData.columnId = updates.columnId;
     if (updates.order !== undefined) updateData.order = updates.order;
     if (updates.completionNotes) updateData.completionNotes = updates.completionNotes;
+    if (updates.assignedToId !== undefined) updateData.assignedToId = updates.assignedToId;
+    if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? parseDateOnly(updates.dueDate) : null;
 
     // Ao concluir o card
     if (updates.status === "done" && !updates.completedAt) {
@@ -111,6 +173,13 @@ export async function PATCH(req: NextRequest) {
       .set(updateData)
       .where(eq(kanbanCards.id, id))
       .returning();
+
+    if (
+      updates.assignedToId &&
+      updates.assignedToId !== existing.assignedToId
+    ) {
+      await notifyAssignee(updated.id, updated.title, updated.boardId, updates.assignedToId, session.user.id);
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -129,6 +198,14 @@ export async function DELETE(req: NextRequest) {
     const cardId = req.nextUrl.searchParams.get("id");
     if (!cardId) {
       return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+    }
+
+    const existing = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
+    if (!existing) {
+      return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
+    }
+    if (!(await assertBoardAccess(session.user.id, existing.boardId))) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
     await db.delete(kanbanCards).where(eq(kanbanCards.id, cardId));

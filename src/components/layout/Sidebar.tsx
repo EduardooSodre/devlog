@@ -18,10 +18,12 @@ import {
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { WorkspaceSwitcher, type WorkspaceOption } from "@/components/layout/WorkspaceSwitcher";
+import { CommandPalette } from "@/components/layout/CommandPalette";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Kanban", href: "/kanban", icon: Kanban },
+  { label: "Projetos", href: "/projetos", icon: Kanban },
   { label: "Documentação", href: "/docs", icon: FileText },
 ];
 
@@ -83,6 +85,9 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProp
 
       {/* ── Nav items ── */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+        <div className={cn("px-2 mb-4", collapsed && "px-0")}>
+          <CommandPalette workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} hideTrigger={collapsed} />
+        </div>
         {!collapsed && (
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-3">
             Menu
@@ -132,6 +137,7 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProp
 
       {/* ── Bottom items ── */}
       <div className="px-2 pb-2 border-t border-border pt-2 space-y-1">
+        <ThemeToggle collapsed={collapsed} />
         {bottomItems.map((item) => {
           const Icon = item.icon;
           return (

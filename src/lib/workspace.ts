@@ -8,9 +8,13 @@ import {
   docEntries,
   docAttachments,
   cardAttachments,
+  subscriptions,
+  departments,
+  departmentMembers,
 } from "@/lib/db/schema";
-import { eq, and, count, sql, inArray } from "drizzle-orm";
+import { eq, and, count, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { getPlanConfig, isWithinLimit, type PlanId } from "@/lib/plans";
+import { isTrialExpired } from "@/lib/org-domain";
 
 export const WORKSPACE_COOKIE = "devlog-workspace";
 
@@ -61,6 +65,30 @@ export async function verifyWorkspaceAccess(userId: string, workspaceId: string)
       eq(workspaceMembers.userId, userId)
     ),
   });
+}
+
+/**
+ * Filtro SQL para "quais boards este usuário enxerga": dono/admin do workspace vê
+ * tudo; membro comum só vê boards sem departamento (visíveis pro workspace inteiro)
+ * ou de departamentos dos quais participa. `undefined` = sem filtro (vê tudo).
+ */
+export async function getBoardVisibilityFilter(
+  userId: string,
+  workspaceId: string,
+  role: string
+): Promise<SQL | undefined> {
+  if (role === "owner" || role === "admin") return undefined;
+
+  const rows = await db
+    .select({ id: departments.id })
+    .from(departments)
+    .innerJoin(departmentMembers, eq(departmentMembers.departmentId, departments.id))
+    .where(and(eq(departments.workspaceId, workspaceId), eq(departmentMembers.userId, userId)));
+  const myDeptIds = rows.map((r) => r.id);
+
+  return myDeptIds.length > 0
+    ? or(isNull(kanbanBoards.departmentId), inArray(kanbanBoards.departmentId, myDeptIds))
+    : isNull(kanbanBoards.departmentId);
 }
 
 export async function getWorkspaceUsage(workspaceId: string) {
@@ -147,6 +175,22 @@ export async function checkPlanLimit(
   });
   if (!workspace) {
     return { allowed: false, message: "Workspace não encontrado", plan: "free" };
+  }
+
+  if (isTrialExpired(workspace)) {
+    const activeSub = await db.query.subscriptions.findFirst({
+      where: and(
+        eq(subscriptions.workspaceId, workspaceId),
+        inArray(subscriptions.status, ["active", "trialing"])
+      ),
+    });
+    if (!activeSub) {
+      return {
+        allowed: false,
+        plan: workspace.plan as PlanId,
+        message: "O trial gratuito de 30 dias da sua organização terminou. Assine o plano Enterprise para continuar.",
+      };
+    }
   }
 
   const plan = getPlanConfig(workspace.plan);

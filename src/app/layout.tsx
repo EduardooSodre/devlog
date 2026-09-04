@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Fira_Code } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import "@/styles/globals.css";
 
@@ -40,19 +41,21 @@ export default function RootLayout({
         className={`${outfit.variable} ${firaCode.variable} font-sans bg-background text-foreground antialiased`}
         suppressHydrationWarning
       >
-        <SessionProvider>
-          {children}
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                background: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
-                color: "hsl(var(--foreground))",
-              },
-            }}
-          />
-        </SessionProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+          <SessionProvider>
+            {children}
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  color: "hsl(var(--foreground))",
+                },
+              }}
+            />
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

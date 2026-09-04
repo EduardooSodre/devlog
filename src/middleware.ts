@@ -2,7 +2,7 @@
  * DevLog — Middleware de Autenticação
  *
  * Rotas públicas: /, /login, /register
- * Rotas protegidas: /dashboard, /kanban, /docs, /settings, /api/*
+ * Rotas protegidas: /dashboard, /projetos, /docs, /settings, /api/*
  */
 
 import { auth } from "@/lib/auth";

@@ -14,8 +14,9 @@ import Google from "next-auth/providers/google";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { users, workspaces, workspaceMembers } from "./db/schema";
+import { users } from "./db/schema";
 import { z } from "zod";
+import { resolveSignupWorkspace } from "./org-domain";
 
 // Schema de validação para login com credentials
 const credentialsSchema = z.object({
@@ -99,34 +100,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
 
   events: {
-    // Cria workspace automático quando novo usuário é criado via OAuth
+    // Só dispara para contas criadas via adapter (OAuth) — o cadastro por e-mail/senha
+    // insere direto na tabela `users` e nunca passa por aqui. Isso é o que torna seguro
+    // agrupar por domínio: GitHub/Google já provaram que o usuário é dono do e-mail.
     async createUser({ user }) {
       if (!user.id || !user.email) return;
-
       const workspaceName = user.name ?? user.email.split("@")[0];
-      const slug = workspaceName
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "-")
-        .replace(/-+/g, "-")
-        .slice(0, 32);
-
-      // Cria workspace pessoal
-      const [workspace] = await db
-        .insert(workspaces)
-        .values({
-          name: `${workspaceName}'s Workspace`,
-          slug: `${slug}-${user.id.slice(0, 6)}`,
-          ownerId: user.id,
-          plan: "free",
-        })
-        .returning();
-
-      // Adiciona owner como membro
-      await db.insert(workspaceMembers).values({
-        workspaceId: workspace.id,
-        userId: user.id,
-        role: "owner",
-      });
+      await resolveSignupWorkspace(user.id, workspaceName, user.email, true);
     },
   },
 

@@ -4,8 +4,8 @@ import { createCheckoutSession, getOrCreateStripeCustomer } from "@/lib/stripe";
 import { PLANS } from "@/lib/plans";
 import { getActiveWorkspace, verifyWorkspaceAccess } from "@/lib/workspace";
 import { db } from "@/lib/db";
-import { workspaces } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { workspaces, workspaceMembers } from "@/lib/db/schema";
+import { eq, count } from "drizzle-orm";
 
 export async function POST(req: Request) {
   try {
@@ -16,6 +16,7 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     let workspaceId = body.workspaceId as string | undefined;
+    const targetPlan = body.plan === "enterprise" ? "enterprise" : "pro";
 
     if (workspaceId) {
       const member = await verifyWorkspaceAccess(session.user.id, workspaceId);
@@ -39,10 +40,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Workspace não encontrado" }, { status: 404 });
     }
 
-    const priceId = PLANS.pro.stripePriceId;
+    const priceId = PLANS[targetPlan].stripePriceId;
     if (!priceId) {
+      const envVar = targetPlan === "enterprise" ? "STRIPE_ENTERPRISE_MONTHLY_PRICE_ID" : "STRIPE_PRO_MONTHLY_PRICE_ID";
       return NextResponse.json(
-        { error: "Stripe não configurado. Defina STRIPE_PRO_MONTHLY_PRICE_ID." },
+        { error: `Stripe não configurado. Defina ${envVar}.` },
         { status: 503 }
       );
     }
@@ -53,13 +55,26 @@ export async function POST(req: Request) {
       workspace.name
     );
 
-    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    // Enterprise é cobrado por assento (R$30/funcionário) — a quantidade acompanha o
+    // número atual de membros do workspace automaticamente.
+    let quantity = 1;
+    if (targetPlan === "enterprise") {
+      const [{ value }] = await db
+        .select({ value: count() })
+        .from(workspaceMembers)
+        .where(eq(workspaceMembers.workspaceId, workspace.id));
+      quantity = Math.max(1, value);
+    }
+
+    const baseUrl = process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
     const checkout = await createCheckoutSession({
       customerId,
       priceId,
       workspaceId: workspace.id,
       successUrl: `${baseUrl}/settings/billing?success=1`,
       cancelUrl: `${baseUrl}/settings/billing?canceled=1`,
+      quantity,
+      plan: targetPlan,
     });
 
     return NextResponse.json({ url: checkout.url });

@@ -155,18 +155,18 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-sm">Tarefas em Andamento</h2>
             <Link
-              href="/kanban"
+              href="/projetos"
               className="text-xs text-primary hover:underline flex items-center gap-1"
             >
-              Ver Kanban <ArrowRight className="w-3 h-3" />
+              Ver Projetos <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <div className="space-y-2">
             {activeTasks.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
                 Nenhuma tarefa ativa.{" "}
-                <Link href="/kanban" className="text-primary hover:underline">
-                  Abrir Kanban
+                <Link href="/projetos" className="text-primary hover:underline">
+                  Abrir Projetos
                 </Link>
               </p>
             ) : (

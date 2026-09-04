@@ -4,10 +4,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { users, workspaces, workspaceMembers } from "@/lib/db/schema";
+import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { resolveSignupWorkspace } from "@/lib/org-domain";
 
 const registerSchema = z.object({
   name: z.string().min(1, "Nome obrigatório").max(100),
@@ -49,29 +50,9 @@ export async function POST(req: NextRequest) {
       .values({ name, email, password: hashedPassword })
       .returning();
 
-    // Cria workspace pessoal
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .slice(0, 30);
-
-    const [workspace] = await db
-      .insert(workspaces)
-      .values({
-        name: `${name}'s Workspace`,
-        slug: `${slug}-${user.id.slice(0, 6)}`,
-        ownerId: user.id,
-        plan: "free",
-      })
-      .returning();
-
-    // Adiciona como owner
-    await db.insert(workspaceMembers).values({
-      workspaceId: workspace.id,
-      userId: user.id,
-      role: "owner",
-    });
+    // Cadastro por e-mail/senha não prova dono do e-mail (sem verificação) — nunca
+    // agrupa por domínio aqui, sempre workspace pessoal. Ver nota em resolveSignupWorkspace.
+    await resolveSignupWorkspace(user.id, name, email, false);
 
     return NextResponse.json(
       { success: true, data: { id: user.id, name: user.name, email: user.email } },

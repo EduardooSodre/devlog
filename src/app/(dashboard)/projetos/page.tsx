@@ -3,20 +3,25 @@ import { db } from "@/lib/db";
 import { kanbanBoards } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { KanbanClientPage } from "@/components/kanban/KanbanClientPage";
-import { getActiveWorkspaceId } from "@/lib/workspace";
+import { getActiveWorkspaceId, verifyWorkspaceAccess, getBoardVisibilityFilter } from "@/lib/workspace";
 
-export const metadata = { title: "Kanban" };
+export const metadata = { title: "Projetos" };
 
-export default async function KanbanPage() {
+export default async function ProjetosPage() {
   const session = await auth();
   const userId = session!.user.id;
   const workspaceId = await getActiveWorkspaceId(userId);
 
-  const boards = workspaceId
+  const membership = workspaceId ? await verifyWorkspaceAccess(userId, workspaceId) : null;
+
+  // Sem workspaceId ou sem associação verificada = não mostra nenhum board — nunca cair
+  // pra "sem filtro" (que mostraria tudo, inclusive boards restritos a departamento).
+  const boards = workspaceId && membership
     ? await db.query.kanbanBoards.findMany({
         where: and(
           eq(kanbanBoards.workspaceId, workspaceId),
-          eq(kanbanBoards.isArchived, false)
+          eq(kanbanBoards.isArchived, false),
+          await getBoardVisibilityFilter(userId, workspaceId, membership.role)
         ),
         with: {
           columns: {
@@ -25,7 +30,14 @@ export default async function KanbanPage() {
               cards: {
                 where: (c, { eq }) => eq(c.isArchived, false),
                 orderBy: (c, { asc }) => [asc(c.order)],
-                with: { attachments: true },
+                with: {
+                  attachments: true,
+                  assignedTo: { columns: { id: true, name: true, image: true } },
+                  comments: {
+                    with: { author: { columns: { id: true, name: true, image: true } } },
+                    orderBy: (c, { asc }) => [asc(c.createdAt)],
+                  },
+                },
               },
             },
           },
