@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { kanbanBoards, kanbanColumns, departments, departmentMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { verifyWorkspaceAccess, getBoardVisibilityFilter } from "@/lib/workspace";
+import { verifyWorkspaceAccess, getBoardVisibilityFilter, canAccessBoard } from "@/lib/workspace";
 
 const createBoardSchema = z.object({
   name: z.string().min(1).max(100),
@@ -154,7 +154,7 @@ export async function PATCH(req: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: "Board não encontrado" }, { status: 404 });
     }
-    if (!(await verifyWorkspaceAccess(session.user.id, existing.workspaceId))) {
+    if (!(await canAccessBoard(session.user.id, existing))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
@@ -198,7 +198,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Board não encontrado" }, { status: 404 });
     }
 
-    if (!(await verifyWorkspaceAccess(session.user.id, board.workspaceId))) {
+    if (!(await canAccessBoard(session.user.id, board))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 

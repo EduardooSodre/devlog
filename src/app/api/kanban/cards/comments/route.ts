@@ -10,16 +10,16 @@ import { db } from "@/lib/db";
 import { cardComments, kanbanCards, kanbanBoards } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { verifyWorkspaceAccess } from "@/lib/workspace";
+import { canAccessBoard } from "@/lib/workspace";
 
 const createCommentSchema = z.object({
   cardId: z.string(),
   content: z.string().min(1).max(4000),
 });
 
-/** Confirma que o usuário é membro do workspace dono do card — sem isso, qualquer
- * usuário autenticado poderia ler/escrever comentários em cards de outros workspaces
- * só sabendo (ou adivinhando) o cardId. */
+/** Confirma acesso ao card (membro do workspace + visibilidade de departamento) —
+ * sem isso, qualquer usuário autenticado poderia ler/escrever comentários em cards de
+ * outros workspaces, ou de boards restritos a um departamento do qual não participa. */
 async function assertCardAccess(userId: string, cardId: string) {
   const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
   if (!card) return null;
@@ -27,8 +27,7 @@ async function assertCardAccess(userId: string, cardId: string) {
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
   if (!board) return null;
 
-  const member = await verifyWorkspaceAccess(userId, board.workspaceId);
-  return member ? card : null;
+  return (await canAccessBoard(userId, board)) ? card : null;
 }
 
 export async function GET(req: NextRequest) {

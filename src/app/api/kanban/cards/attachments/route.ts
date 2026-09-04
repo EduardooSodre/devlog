@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { cardAttachments, kanbanCards, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { verifyWorkspaceAccess } from "@/lib/workspace";
+import { canAccessBoard } from "@/lib/workspace";
 
 const createAttachmentSchema = z.object({
   cardId: z.string(),
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
     }
     const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
-    if (!board || !(await verifyWorkspaceAccess(session.user.id, board.workspaceId))) {
+    if (!board || !(await canAccessBoard(session.user.id, board))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 

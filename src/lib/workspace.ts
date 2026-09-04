@@ -68,6 +68,31 @@ export async function verifyWorkspaceAccess(userId: string, workspaceId: string)
 }
 
 /**
+ * O check de acesso de verdade para um board específico (e por extensão, seus cards,
+ * comentários e anexos): não basta ser membro do workspace — se o board está restrito
+ * a um departamento, só quem está nesse departamento (ou é owner/admin) pode ler ou
+ * escrever nele. Usar isto em vez de `verifyWorkspaceAccess` sozinho em qualquer rota
+ * que opera sobre um board/card já existente.
+ */
+export async function canAccessBoard(
+  userId: string,
+  board: { workspaceId: string; departmentId: string | null }
+): Promise<boolean> {
+  const member = await verifyWorkspaceAccess(userId, board.workspaceId);
+  if (!member) return false;
+  if (!board.departmentId) return true;
+  if (member.role === "owner" || member.role === "admin") return true;
+
+  const inDept = await db.query.departmentMembers.findFirst({
+    where: and(
+      eq(departmentMembers.departmentId, board.departmentId),
+      eq(departmentMembers.userId, userId)
+    ),
+  });
+  return !!inDept;
+}
+
+/**
  * Filtro SQL para "quais boards este usuário enxerga": dono/admin do workspace vê
  * tudo; membro comum só vê boards sem departamento (visíveis pro workspace inteiro)
  * ou de departamentos dos quais participa. `undefined` = sem filtro (vê tudo).

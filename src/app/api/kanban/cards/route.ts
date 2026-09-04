@@ -11,7 +11,7 @@ import { kanbanCards, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { sendPushToUser } from "@/lib/push";
-import { verifyWorkspaceAccess } from "@/lib/workspace";
+import { canAccessBoard } from "@/lib/workspace";
 
 /**
  * Converte uma data "YYYY-MM-DD" (vinda do <input type="date">) em meia-noite LOCAL,
@@ -23,13 +23,13 @@ function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00`);
 }
 
-/** Confirma que o usuário é membro do workspace dono do board — sem isso, qualquer
- * usuário autenticado poderia criar/editar/excluir cards de outros workspaces só
- * sabendo (ou adivinhando) o id. */
+/** Confirma acesso ao board (membro do workspace + visibilidade de departamento) —
+ * sem isso, qualquer usuário autenticado poderia criar/editar/excluir cards de boards
+ * de outros workspaces, ou de boards restritos a um departamento do qual não participa. */
 async function assertBoardAccess(userId: string, boardId: string) {
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
   if (!board) return false;
-  return !!(await verifyWorkspaceAccess(userId, board.workspaceId));
+  return canAccessBoard(userId, board);
 }
 
 const createCardSchema = z.object({
