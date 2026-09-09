@@ -57,6 +57,9 @@ export async function GET(req: NextRequest) {
                   with: { author: { columns: { id: true, name: true, image: true } } },
                   orderBy: (c, { asc }) => [asc(c.createdAt)],
                 },
+                subtasks: {
+                  orderBy: (s, { asc }) => [asc(s.order)],
+                },
               },
               orderBy: (c, { asc }) => [asc(c.order)],
             },

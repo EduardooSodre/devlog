@@ -4,6 +4,30 @@
 
 ---
 
+## [0.1.1] — 2026-07-13 — Ambiente travado + mapeamento completo
+
+### Corrigido
+
+- `fix`: **Ambiente de desenvolvimento "em loop infinito"**. Não era um bug no código — eram 34 processos `node.exe` acumulados na máquina de execuções antigas do `npm run dev` que nunca foram encerradas (Ctrl+C não usado / terminal fechado direto). Um deles estava preso na porta 3000 havia tempo, consumindo 1.1GB de RAM e fazendo cada nova tentativa de rodar o projeto "travar" sem nunca subir de verdade.
+
+#### Causa
+
+Processos zumbis do Next.js/Turbopack acumulando a cada nova execução, disputando porta e memória.
+
+#### Solução
+
+Encerrados todos os processos `node.exe` travados (`taskkill /F /IM node.exe /T`). Servidor voltou a subir limpo em ~450ms na porta 3000.
+
+### Impacto
+
+Se isso voltar a acontecer: sempre pare o `npm run dev` com Ctrl+C antes de fechar o terminal. Em caso de dúvida, rodar `tasklist | findstr node` no PowerShell mostra se há processos antigos ainda vivos.
+
+### Adicionado
+
+- `docs`: [`docs/o-que-existe.md`](docs/o-que-existe.md) — visão geral direta de tudo que já está implementado no DevLog (auth, workspaces, Kanban, documentação, billing, API pública, scripts de automação) e o que está pronto no código mas ainda não ligado (OAuth, Stripe).
+
+---
+
 ## [0.1.0] — 2025-01-XX — Release inicial
 
 ### Adicionado

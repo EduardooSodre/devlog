@@ -66,6 +66,10 @@ export const users = pgTable("users", {
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
   password: text("password"), // null para usuários OAuth
+  jobTitle: text("job_title"), // cargo — preenchido no onboarding
+  // Default true pra não forçar o wizard em quem já usava o app antes dessa coluna
+  // existir — os fluxos de criação de usuário (registro e OAuth) passam false explicitamente.
+  hasOnboarded: boolean("has_onboarded").notNull().default(true),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
@@ -178,6 +182,9 @@ export const workspaceInvites = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
+    // Convite pode ser só pro workspace, ou já direto pra um departamento específico —
+    // nesse caso o aceite também insere em departmentMembers (ver /invites/accept).
+    departmentId: text("department_id").references(() => departments.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
     role: memberRoleEnum("role").notNull().default("member"),
     token: text("token").notNull().unique(),
@@ -302,6 +309,7 @@ export const kanbanCards = pgTable(
     priority: cardPriorityEnum("priority").notNull().default("medium"),
     status: cardStatusEnum("status").notNull().default("todo"),
     order: integer("order").notNull().default(0),
+    startDate: timestamp("start_date", { mode: "date" }),
     dueDate: timestamp("due_date", { mode: "date" }),
     completedAt: timestamp("completed_at", { mode: "date" }),
     completionNotes: text("completion_notes"), // Observações ao concluir
@@ -353,6 +361,28 @@ export const cardComments = pgTable("card_comments", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// Subtarefas: checklist simples dentro de um card (uma tarefa pode ter várias).
+// Não são cards completos (sem coluna/prioridade própria) — se precisar disso no
+// futuro, promover pra kanbanCards com parentCardId em vez de esticar esta tabela.
+export const cardSubtasks = pgTable(
+  "card_subtasks",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    cardId: text("card_id")
+      .notNull()
+      .references(() => kanbanCards.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    isDone: boolean("is_done").notNull().default(false),
+    order: integer("order").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    cardIdx: index("subtasks_card_idx").on(table.cardId),
+  })
+);
 
 // ─────────────────────────────────────────────
 // DOCUMENTAÇÃO
@@ -515,6 +545,10 @@ export const workspaceInvitesRelations = relations(workspaceInvites, ({ one }) =
     fields: [workspaceInvites.workspaceId],
     references: [workspaces.id],
   }),
+  department: one(departments, {
+    fields: [workspaceInvites.departmentId],
+    references: [departments.id],
+  }),
   invitedBy: one(users, {
     fields: [workspaceInvites.invitedById],
     references: [users.id],
@@ -553,6 +587,7 @@ export const kanbanCardsRelations = relations(kanbanCards, ({ one, many }) => ({
   }),
   attachments: many(cardAttachments),
   comments: many(cardComments),
+  subtasks: many(cardSubtasks),
   tags: many(cardTags),
   assignedTo: one(users, {
     fields: [kanbanCards.assignedToId],
@@ -609,6 +644,13 @@ export const cardAttachmentsRelations = relations(cardAttachments, ({ one }) => 
   uploader: one(users, {
     fields: [cardAttachments.uploadedById],
     references: [users.id],
+  }),
+}));
+
+export const cardSubtasksRelations = relations(cardSubtasks, ({ one }) => ({
+  card: one(kanbanCards, {
+    fields: [cardSubtasks.cardId],
+    references: [kanbanCards.id],
   }),
 }));
 

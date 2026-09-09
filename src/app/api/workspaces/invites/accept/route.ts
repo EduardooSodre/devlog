@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { workspaceInvites, workspaceMembers } from "@/lib/db/schema";
+import { workspaceInvites, workspaceMembers, departmentMembers } from "@/lib/db/schema";
 import { eq, and, isNull, gt } from "drizzle-orm";
 import { z } from "zod";
 
@@ -55,6 +55,15 @@ export async function POST(req: Request) {
       // Cobrança por assento (R$30/funcionário) acompanha o time automaticamente.
       const { syncSeatQuantity } = await import("@/lib/stripe");
       await syncSeatQuantity(invite.workspaceId);
+    }
+
+    if (invite.departmentId) {
+      const inDept = await db.query.departmentMembers.findFirst({
+        where: and(eq(departmentMembers.departmentId, invite.departmentId), eq(departmentMembers.userId, session.user.id)),
+      });
+      if (!inDept) {
+        await db.insert(departmentMembers).values({ departmentId: invite.departmentId, userId: session.user.id });
+      }
     }
 
     await db

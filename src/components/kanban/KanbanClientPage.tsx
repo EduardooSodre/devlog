@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
@@ -26,6 +27,8 @@ const VIEWS = [
   { id: "files", label: "Arquivos", icon: Paperclip },
 ] as const;
 type ViewId = (typeof VIEWS)[number]["id"];
+
+const BOARD_COLORS = ["#4f6ef7", "#22d3ee", "#10b981", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#a855f7"];
 
 interface Props {
   initialBoards: KanbanBoardWithColumns[];
@@ -53,10 +56,13 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [newCardTitle, setNewCardTitle] = useState("");
   const [loadingCard, setLoadingCard] = useState(false);
   const [editingBoard, setEditingBoard] = useState(false);
+  const [editBoardName, setEditBoardName] = useState("");
+  const [editBoardColor, setEditBoardColor] = useState("");
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [showBoardSettings, setShowBoardSettings] = useState(false);
+  const [showBoardSwitcher, setShowBoardSwitcher] = useState(false);
   const [view, setView] = useState<ViewId>("board");
   const [filterMine, setFilterMine] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(true);
@@ -104,6 +110,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       setNewBoardName("");
       setNewBoardDepartmentId("");
       setCreatingBoard(false);
+      setShowBoardSwitcher(false);
       toast.success("Board criado!");
     } catch {
       toast.error("Erro ao criar board");
@@ -340,6 +347,12 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
     }
   }
 
+  async function handleSaveBoardEdit() {
+    if (!editBoardName.trim()) return;
+    await handleUpdateBoard({ name: editBoardName.trim(), color: editBoardColor });
+    setEditingBoard(false);
+  }
+
   const cardsWithDue = boards.flatMap((b) =>
     b.columns.flatMap((col) =>
       col.cards
@@ -358,85 +371,102 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       <div className="px-6 pt-4">
         <DueDateAlerts cards={cardsWithDue} />
       </div>
-      {/* ── Toolbar ── */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2">
-            {boards.map((board) => (
-              <button
-                key={board.id}
-                onClick={() => setActiveBoard(board)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
-                  activeBoard?.id === board.id
-                    ? "bg-primary text-white shadow-lg shadow-primary/20"
-                    : "hover:bg-card text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {board.name}
-              </button>
-            ))}
+      {/* ── Title row: board switcher + settings ── */}
+      <div className="flex items-center justify-between px-6 pt-5 pb-1">
+        <div className="relative min-w-0">
+          <button
+            onClick={() => setShowBoardSwitcher((v) => !v)}
+            className="flex items-center gap-1.5 -ml-2 px-2 py-1 rounded-lg text-xl font-semibold hover:bg-card transition-colors max-w-full"
+          >
+            <span className="truncate">{activeBoard?.name ?? "Nenhum board"}</span>
+            <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", showBoardSwitcher && "rotate-180")} />
+          </button>
 
-            {creatingBoard ? (
-              <div className="flex items-center gap-2">
-                <input
-                  autoFocus
-                  value={newBoardName}
-                  onChange={(e) => setNewBoardName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreateBoard();
-                    if (e.key === "Escape") setCreatingBoard(false);
-                  }}
-                  placeholder="Nome do board…"
-                  className="h-8 px-3 bg-card border border-border rounded-lg text-sm focus:outline-none focus:border-primary w-40"
-                />
-                {departments.length > 0 && (
-                  <select
-                    value={newBoardDepartmentId}
-                    onChange={(e) => setNewBoardDepartmentId(e.target.value)}
-                    title="Restringir a um departamento"
-                    className="h-8 px-2 bg-card border border-border rounded-lg text-xs text-muted-foreground focus:outline-none focus:border-primary"
-                  >
-                    <option value="">Todo o workspace</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+          {showBoardSwitcher && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowBoardSwitcher(false)} />
+              <div className="absolute left-0 top-full mt-1 w-72 bg-card border border-border rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
+                {boards.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto space-y-0.5 mb-1">
+                    {boards.map((board) => (
+                      <button
+                        key={board.id}
+                        onClick={() => {
+                          setActiveBoard(board);
+                          setShowBoardSwitcher(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-left transition-colors",
+                          activeBoard?.id === board.id
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "text-foreground hover:bg-primary/5"
+                        )}
+                      >
+                        <Kanban className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{board.name}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 )}
-                <button
-                  onClick={handleCreateBoard}
-                  className="text-xs text-primary font-medium hover:underline"
-                >
-                  Criar
-                </button>
-                <button onClick={() => setCreatingBoard(false)}>
-                  <X className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
+
+                <div className={cn(boards.length > 0 && "border-t border-border pt-1")}>
+                  {creatingBoard ? (
+                    <div className="p-1 space-y-2">
+                      <input
+                        autoFocus
+                        value={newBoardName}
+                        onChange={(e) => setNewBoardName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleCreateBoard();
+                          if (e.key === "Escape") setCreatingBoard(false);
+                        }}
+                        placeholder="Nome do board…"
+                        className="w-full h-9 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
+                      />
+                      {departments.length > 0 && (
+                        <select
+                          value={newBoardDepartmentId}
+                          onChange={(e) => setNewBoardDepartmentId(e.target.value)}
+                          title="Restringir a um departamento"
+                          className="w-full h-9 px-2 bg-background border border-border rounded-lg text-xs text-muted-foreground focus:outline-none focus:border-primary"
+                        >
+                          <option value="">Todo o workspace</option>
+                          {departments.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleCreateBoard}
+                          className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Criar
+                        </button>
+                        <button
+                          onClick={() => setCreatingBoard(false)}
+                          className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setCreatingBoard(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-primary/5 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Novo board
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <button
-                onClick={() => setCreatingBoard(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-card transition-all text-sm border border-transparent hover:border-border"
-              >
-                <Plus className="w-3.5 h-3.5" /> Novo board
-              </button>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {activeBoard && (
-          <div className="flex items-center gap-2">
-            <Tabs value={view} onValueChange={(v) => setView(v as ViewId)}>
-              <TabsList>
-                {VIEWS.map(({ id, label, icon: Icon }) => (
-                  <TabsTrigger key={id} value={id} title={label}>
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="hidden lg:inline">{label}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               onClick={() => setShowBoardSettings(!showBoardSettings)}
               className={cn(
@@ -449,21 +479,70 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
 
             {showBoardSettings && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowBoardSettings(false)} />
-                <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-2xl shadow-xl z-20 p-2 animate-in fade-in zoom-in duration-200">
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => {
+                    setShowBoardSettings(false);
+                    setEditingBoard(false);
+                  }}
+                />
+                <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
                   <div className="px-3 py-2 border-b border-border mb-1">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Configurações</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      const name = prompt("Novo nome do board:", activeBoard.name);
-                      if (name && name !== activeBoard.name) handleUpdateBoard({ name });
-                      setShowBoardSettings(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors"
-                  >
-                    <Palette className="w-4 h-4" /> Editar Nome/Cor
-                  </button>
+
+                  {editingBoard ? (
+                    <div className="p-2 space-y-3">
+                      <input
+                        autoFocus
+                        value={editBoardName}
+                        onChange={(e) => setEditBoardName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSaveBoardEdit()}
+                        placeholder="Nome do board…"
+                        className="w-full h-9 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
+                      />
+                      <div className="flex items-center gap-2">
+                        {BOARD_COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setEditBoardColor(c)}
+                            title={c}
+                            className={cn(
+                              "w-6 h-6 rounded-full transition-transform hover:scale-110",
+                              editBoardColor === c && "ring-2 ring-offset-2 ring-offset-card ring-foreground"
+                            )}
+                            style={{ background: c }}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleSaveBoardEdit}
+                          className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          onClick={() => setEditingBoard(false)}
+                          className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setEditBoardName(activeBoard.name);
+                        setEditBoardColor(activeBoard.color ?? BOARD_COLORS[0]);
+                        setEditingBoard(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors"
+                    >
+                      <Palette className="w-4 h-4" /> Editar Nome/Cor
+                    </button>
+                  )}
+
                   <button
                     onClick={handleDeleteBoard}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
@@ -474,37 +553,52 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
               </>
             )}
           </div>
-          </div>
         )}
       </div>
 
-      {activeBoard && view !== "board" && (
-        <div className="flex items-center gap-2 px-6 pb-3 -mt-2">
-          <button
-            onClick={() => setFilterMine((v) => !v)}
-            className={cn(
-              "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
-              filterMine
-                ? "bg-primary/10 border-primary/40 text-primary font-medium"
-                : "border-border text-muted-foreground hover:border-primary/30"
-            )}
-          >
-            <UserCircle2 className="w-3.5 h-3.5" />
-            Minhas tarefas
-          </button>
-          {(view === "list" || view === "timeline" || view === "calendar") && (
-            <button
-              onClick={() => setHideCompleted((v) => !v)}
-              className={cn(
-                "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
-                hideCompleted
-                  ? "bg-primary/10 border-primary/40 text-primary font-medium"
-                  : "border-border text-muted-foreground hover:border-primary/30"
+      {/* ── View tabs row ── */}
+      {activeBoard && (
+        <div className="flex flex-wrap items-center justify-between gap-y-1 px-6 border-b border-border">
+          <Tabs value={view} onValueChange={(v) => setView(v as ViewId)}>
+            <TabsList>
+              {VIEWS.map(({ id, label, icon: Icon }) => (
+                <TabsTrigger key={id} value={id} title={label}>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="hidden lg:inline">{label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          {view !== "board" && (
+            <div className="flex items-center gap-2 py-2">
+              <button
+                onClick={() => setFilterMine((v) => !v)}
+                className={cn(
+                  "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+                  filterMine
+                    ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:border-primary/30"
+                )}
+              >
+                <UserCircle2 className="w-3.5 h-3.5" />
+                Minhas tarefas
+              </button>
+              {(view === "list" || view === "timeline" || view === "calendar") && (
+                <button
+                  onClick={() => setHideCompleted((v) => !v)}
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+                    hideCompleted
+                      ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                      : "border-border text-muted-foreground hover:border-primary/30"
+                  )}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Ocultar concluídas
+                </button>
               )}
-            >
-              <EyeOff className="w-3.5 h-3.5" />
-              Ocultar concluídas
-            </button>
+            </div>
           )}
         </div>
       )}
@@ -684,8 +778,8 @@ function KanbanColumn({
             </button>
             {showColumnActions && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowColumnActions(false)} />
-                <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-xl shadow-xl z-20 p-1 animate-in fade-in zoom-in duration-200">
+                <div className="fixed inset-0 z-40" onClick={() => setShowColumnActions(false)} />
+                <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-xl shadow-xl z-50 p-1 animate-in fade-in zoom-in duration-200">
                   <button
                     onClick={() => {
                       onDeleteColumn();
@@ -726,8 +820,9 @@ function KanbanColumn({
           >
             {cards.map((card, index) => (
               <Draggable key={card.id} draggableId={card.id} index={index}>
-                {(drag, snap) => (
-                  <div
+                {(drag, snap) => {
+                  const cardEl = (
+                    <div
                     ref={drag.innerRef}
                     {...drag.draggableProps}
                     {...drag.dragHandleProps}
@@ -771,6 +866,11 @@ function KanbanColumn({
                     {/* Footer */}
                     <div className="flex items-center justify-between mt-1">
                       <div className="flex items-center gap-2">
+                        {card.subtasks && card.subtasks.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            ☑ {card.subtasks.filter((s) => s.isDone).length}/{card.subtasks.length}
+                          </span>
+                        )}
                         {card.attachments && card.attachments.length > 0 && (
                           <span className="text-xs text-muted-foreground">
                             📎 {card.attachments.length}
@@ -797,7 +897,16 @@ function KanbanColumn({
                       )}
                     </div>
                   </div>
-                )}
+                  );
+
+                  // BoardCanvas usa CSS transform pra fazer o pan horizontal (ver comentário lá) — mas
+                  // isso vira o "containing block" de qualquer descendente com position:fixed, incluindo
+                  // o card sendo arrastado. Resultado: o card fica preso ao offset do pan em vez de
+                  // seguir o ponteiro do mouse. Escapando pra um portal em document.body durante o drag,
+                  // o position:fixed do @hello-pangea/dnd volta a ser relativo à viewport (comportamento
+                  // documentado da lib para ancestrais com transform).
+                  return snap.isDragging ? createPortal(cardEl, document.body) : cardEl;
+                }}
               </Draggable>
             ))}
             {provided.placeholder}

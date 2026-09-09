@@ -42,7 +42,7 @@ export function ProfileSettingsForm({ user }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center text-lg font-bold text-primary border border-primary/10">
+        <div className="w-14 h-14 shrink-0 rounded-full bg-primary/20 flex items-center justify-center text-lg font-bold text-primary border border-primary/10">
           {user.image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.image} alt="" className="w-full h-full rounded-full object-cover" />

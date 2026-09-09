@@ -11,6 +11,7 @@ import type {
   kanbanCards,
   cardAttachments,
   cardComments,
+  cardSubtasks,
   docEntries,
   docAttachments,
   tags,
@@ -25,6 +26,7 @@ export type KanbanColumn = InferSelectModel<typeof kanbanColumns>;
 export type KanbanCard = InferSelectModel<typeof kanbanCards>;
 export type CardAttachment = InferSelectModel<typeof cardAttachments>;
 export type CardComment = InferSelectModel<typeof cardComments>;
+export type CardSubtask = InferSelectModel<typeof cardSubtasks>;
 export type DocEntry = InferSelectModel<typeof docEntries>;
 export type DocAttachment = InferSelectModel<typeof docAttachments>;
 export type Tag = InferSelectModel<typeof tags>;
@@ -49,6 +51,7 @@ export type KanbanBoardWithColumns = KanbanBoard & {
 export type KanbanCardWithDetails = KanbanCard & {
   attachments?: CardAttachment[];
   comments?: (CardComment & { author?: Pick<User, "id" | "name" | "image"> })[];
+  subtasks?: CardSubtask[];
   tags?: Tag[];
   assignedTo?: Pick<User, "id" | "name" | "image"> | null;
   createdBy?: Pick<User, "id" | "name" | "image">;

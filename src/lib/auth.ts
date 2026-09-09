@@ -107,6 +107,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (!user.id || !user.email) return;
       const workspaceName = user.name ?? user.email.split("@")[0];
       await resolveSignupWorkspace(user.id, workspaceName, user.email, true);
+      // A coluna tem default true (pra não afetar quem já existia antes dela existir) —
+      // usuário recém-criado via OAuth precisa do onboarding como qualquer outro.
+      await db.update(users).set({ hasOnboarded: false }).where(eq(users.id, user.id));
     },
   },
 

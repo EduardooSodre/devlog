@@ -11,19 +11,21 @@ export async function GET() {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const membership = await db.query.workspaceMembers.findFirst({
-    where: eq(workspaceMembers.userId, session.user.id),
-  });
+  const [membership, dbUser] = await Promise.all([
+    db.query.workspaceMembers.findFirst({ where: eq(workspaceMembers.userId, session.user.id) }),
+    db.query.users.findFirst({ where: eq(users.id, session.user.id) }),
+  ]);
 
   return NextResponse.json({
-    user: session.user,
+    user: { ...session.user, jobTitle: dbUser?.jobTitle ?? null },
     workspaceId: membership?.workspaceId ?? null,
     role: membership?.role ?? null,
   });
 }
 
 const updateProfileSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).optional(),
+  jobTitle: z.string().max(100).optional().nullable(),
 });
 
 export async function PATCH(req: Request) {
@@ -39,9 +41,13 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
+    const { name, jobTitle } = parsed.data;
     const [updated] = await db
       .update(users)
-      .set({ name: parsed.data.name })
+      .set({
+        ...(name !== undefined && { name }),
+        ...(jobTitle !== undefined && { jobTitle }),
+      })
       .where(eq(users.id, session.user.id))
       .returning();
 

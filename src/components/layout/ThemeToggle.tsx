@@ -20,19 +20,31 @@ export function ThemeToggle({ collapsed }: Props) {
   }
 
   const isLight = theme === "light";
+  const label = isLight ? "Modo escuro" : "Modo claro";
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setTheme(isLight ? "dark" : "light")}
+        title={label}
+        className="flex flex-col items-center justify-center gap-1 w-full min-w-0 py-2.5 rounded-xl text-center text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+      >
+        {isLight ? <Moon className="w-[18px] h-[18px] shrink-0" /> : <Sun className="w-[18px] h-[18px] shrink-0" />}
+        <span className="w-full text-[10px] font-medium leading-tight line-clamp-2 break-words px-0.5">{label}</span>
+      </button>
+    );
+  }
 
   return (
     <button
       type="button"
       onClick={() => setTheme(isLight ? "dark" : "light")}
-      title={isLight ? "Modo escuro" : "Modo claro"}
-      className={cn(
-        "flex items-center gap-2.5 px-2 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-card transition-colors",
-        collapsed && "justify-center px-0"
-      )}
+      title={label}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-background transition-colors w-full"
     >
       {isLight ? <Moon className="w-4 h-4 shrink-0" /> : <Sun className="w-4 h-4 shrink-0" />}
-      {!collapsed && (isLight ? "Modo escuro" : "Modo claro")}
+      {label}
     </button>
   );
 }

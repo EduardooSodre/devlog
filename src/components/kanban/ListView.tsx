@@ -77,7 +77,7 @@ export function ListView({ columns, onCardClick }: Props) {
               <TableCell>
                 {card.assignedTo ? (
                   <span className="inline-flex items-center gap-2 text-xs">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden">
+                    <span className="w-5 h-5 shrink-0 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden">
                       {card.assignedTo.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={card.assignedTo.image} alt="" className="w-full h-full object-cover" />

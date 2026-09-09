@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Resumo de Entregas — Eduardo Sodré</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f2;
+    --paper: #ffffff;
+    --ink: #1b2430;
+    --ink-soft: #4a5560;
+    --muted: #7c8790;
+    --line: #dde2e5;
+    --accent: #265d6b;
+    --accent-soft: #e7eef0;
+    --accent-strong: #163f49;
+    --tag-bg: #eef2f0;
+    --shadow: rgba(27, 36, 48, 0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11161c;
+      --paper: #171d25;
+      --ink: #eef1f3;
+      --ink-soft: #c2cad2;
+      --muted: #8996a1;
+      --line: #2b333d;
+      --accent: #6fb3c4;
+      --accent-soft: #1c2c30;
+      --accent-strong: #9bd2df;
+      --tag-bg: #1c2a29;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #11161c;
+    --paper: #171d25;
+    --ink: #eef1f3;
+    --ink-soft: #c2cad2;
+    --muted: #8996a1;
+    --line: #2b333d;
+    --accent: #6fb3c4;
+    --accent-soft: #1c2c30;
+    --accent-strong: #9bd2df;
+    --tag-bg: #1c2a29;
+    --shadow: rgba(0, 0, 0, 0.35);
+  }
+
+  :root[data-theme="light"] {
+    --bg: #eef1f2;
+    --paper: #ffffff;
+    --ink: #1b2430;
+    --ink-soft: #4a5560;
+    --muted: #7c8790;
+    --line: #dde2e5;
+    --accent: #265d6b;
+    --accent-soft: #e7eef0;
+    --accent-strong: #163f49;
+    --tag-bg: #eef2f0;
+    --shadow: rgba(27, 36, 48, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a, .tag { transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease; }
+  }
+
+  .sheet {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 20px 64px;
+  }
+
+  .page {
+    margin: 0 auto;
+    padding: 56px 64px 72px;
+    background: var(--paper);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px var(--shadow), 0 24px 48px -24px var(--shadow);
+  }
+
+  img, table { max-width: 100%; }
+
+  /* ---------- Masthead ---------- */
+
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px 24px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 20px;
+    margin-bottom: 8px;
+  }
+
+  .masthead .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(26px, 4.4vw, 34px);
+    line-height: 1.12;
+    margin: 0;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+
+  .masthead .meta {
+    text-align: right;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .masthead .meta strong {
+    display: block;
+    color: var(--ink-soft);
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  /* ---------- Executive summary ---------- */
+
+  .summary {
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    border-radius: 2px;
+    margin: 28px 0 40px;
+    padding: 22px 28px;
+  }
+
+  .summary .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+
+  .summary ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .summary li {
+    position: relative;
+    padding-left: 20px;
+    margin: 0 0 9px;
+    color: var(--ink-soft);
+  }
+
+  .summary li:last-child { margin-bottom: 0; }
+
+  .summary li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .summary strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Section headers ---------- */
+
+  h2 {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 600;
+    font-size: 21px;
+    color: var(--ink);
+    margin: 44px 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  h2:first-of-type { margin-top: 0; }
+
+  /* ---------- System entries ---------- */
+
+  .system {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    column-gap: 18px;
+    row-gap: 4px;
+    margin: 0 0 30px;
+  }
+
+  .system .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    padding-top: 3px;
+  }
+
+  .system .title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .system h3 {
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-weight: 600;
+    font-size: 17.5px;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .system .alias {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .system .lede {
+    grid-column: 2;
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    margin: 4px 0 10px;
+    max-width: 62ch;
+  }
+
+  .system ul {
+    grid-column: 2;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-width: 68ch;
+  }
+
+  .system li {
+    position: relative;
+    padding-left: 16px;
+    margin: 0 0 7px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .system li:last-child { margin-bottom: 0; }
+
+  .system li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--muted);
+  }
+
+  .system li strong { color: var(--ink); font-weight: 600; }
+
+  .tag {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: var(--tag-bg);
+    color: var(--accent-strong);
+    border-radius: 3px;
+    padding: 2px 7px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  /* ---------- GED callout ---------- */
+
+  .ged {
+    margin: 8px 0 40px;
+    padding: 20px 24px;
+    border: 1.5px dashed var(--accent);
+    border-radius: 4px;
+    background: linear-gradient(180deg, rgba(38,93,107,0.06), rgba(38,93,107,0));
+  }
+
+  .ged .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+
+  .ged p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+    max-width: 68ch;
+  }
+
+  /* ---------- Numbers table ---------- */
+
+  .table-scroll {
+    overflow-x: auto;
+    margin: 8px 0 40px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100%;
+    min-width: 380px;
+    border-collapse: collapse;
+  }
+
+  th {
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 0 0 10px;
+    border-bottom: 1.5px solid var(--ink);
+    white-space: nowrap;
+  }
+
+  th:last-child, td:last-child { text-align: right; }
+
+  td {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 14.5px;
+    color: var(--ink-soft);
+  }
+
+  td:last-child {
+    font-family: 'IBM Plex Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 15px;
+    white-space: nowrap;
+    padding-left: 16px;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  /* ---------- Highlights ---------- */
+
+  .highlights {
+    counter-reset: hl;
+    margin: 8px 0 8px;
+    padding: 0;
+    list-style: none;
+  }
+
+  .highlights li {
+    counter-increment: hl;
+    position: relative;
+    padding: 14px 0 14px 40px;
+    border-bottom: 1px solid var(--line);
+    font-size: 14px;
+    color: var(--ink-soft);
+    max-width: 70ch;
+  }
+
+  .highlights li:last-child { border-bottom: none; }
+
+  .highlights li::before {
+    content: counter(hl, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .highlights strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Responsive: tablet ---------- */
+
+  @media (max-width: 700px) {
+    .sheet { padding: 28px 0 48px; }
+    .page { padding: 40px 28px 48px; border-radius: 0; }
+
+    .masthead {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .masthead .meta { text-align: left; }
+
+    .system {
+      grid-template-columns: 1fr;
+    }
+    .system .num {
+      grid-row: 1;
+      padding-top: 0;
+    }
+    .system .title-row,
+    .system .lede,
+    .system ul {
+      grid-column: 1;
+    }
+    .system .lede, .system ul { max-width: none; }
+
+    h2 { font-size: 19px; }
+  }
+
+  /* ---------- Responsive: phone ---------- */
+
+  @media (max-width: 460px) {
+    html, body { font-size: 14.5px; }
+    .page { padding: 32px 18px 40px; }
+    .summary { padding: 18px 18px; margin: 22px 0 32px; }
+    .ged { padding: 16px 18px; }
+  }
+
+  @media print {
+    @page { size: A4; margin: 26mm 14mm 14mm; }
+    @page :first { margin-top: 14mm; }
+
+    .sheet { padding: 0; max-width: none; }
+    body { background: var(--paper); font-size: 14px; }
+    .page { padding: 26px 40px 30px; border-radius: 0; box-shadow: none; }
+    .system { margin-bottom: 16px; }
+    .system li { margin-bottom: 5px; break-inside: avoid; }
+    .system .title-row { break-after: avoid; break-inside: avoid; }
+    .system .lede { break-after: avoid; }
+    h2 { margin: 22px 0 12px; break-after: avoid; }
+    .summary { margin: 14px 0 22px; padding: 14px 20px; }
+    .summary li { margin-bottom: 6px; }
+    .ged, table, .highlights li { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <p class="eyebrow">Relatório de entregas · Rosh</p>
+      <h1>Resumo de Entregas<br>Eduardo Sodré</h1>
+    </div>
+    <div class="meta">
+      <strong>26 abr — 08 jul 2026</strong>
+      74 dias corridos
+    </div>
+  </div>
+
+  <div class="summary">
+    <p class="label">Em 30 segundos</p>
+    <ul>
+      <li><strong>10 sistemas</strong> da Rosh foram mantidos, melhorados ou criados do zero.</li>
+      <li><strong>~200 entregas</strong> — features, correções e ajustes — publicadas no período.</li>
+      <li><strong>Os 6 sistemas que estavam sob domínio do Gustavo (funcionário anterior) hoje são 100% da Rosh</strong> — código, acesso e manutenção totalmente migrados, sem qualquer dependência dele.</li>
+      <li><strong>3 sistemas novos</strong> nasceram no período: NotaFinder (ganhou dashboard próprio), searchTitle, e as bases de ProdutoFiscal e Auth_Sienge.</li>
+      <li>A única exceção é o <strong>Sistema GED</strong>, projeto pessoal de Eduardo, fora do escopo da Rosh — ver detalhes no final.</li>
+    </ul>
+  </div>
+
+  <h2>O que foi feito, sistema por sistema</h2>
+
+  <div class="system">
+    <div class="num">01</div>
+    <div>
+      <div class="title-row">
+        <h3>Rosh Comunicados</h3>
+        <span class="alias">antes Hub Rosh / Rosh Conecta</span>
+        <span class="tag">Portal interno</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Foi estabilizado, ganhou identidade nova — escolhida pelos próprios colaboradores — e vários recursos novos.</p>
+    <ul>
+      <li><strong>Nome novo escolhido pela empresa:</strong> concurso interno com votação ao vivo definiu "Rosh Comunicados" — enquete, apuração em tempo real e painel de resultado, tudo construído do zero</li>
+      <li>Mural de notícias com múltiplas fotos por post, correção de imagens cortadas, opção de fixar notícias importantes no topo</li>
+      <li>Procedimentos Operacionais (PO): upload e reordenação dos documentos da empresa</li>
+      <li>Painel administrativo mais confiável: permissões aplicadas na hora, sem precisar recarregar a página</li>
+      <li>Correção de falha de segurança onde a home aparecia mesmo sem login válido</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">02</div>
+    <div>
+      <div class="title-row">
+        <h3>Sistema Nexus</h3>
+        <span class="alias">antes OpenTicket</span>
+        <span class="tag">Chamados</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Recebeu integrações que aceleraram o processo fiscal.</p>
+    <ul>
+      <li>E-mails do sistema migrados para o Microsoft 365, com reserva automática caso falhe o envio</li>
+      <li>Download do PDF da nota fiscal direto no chamado, sem precisar abrir outro sistema</li>
+      <li>Novas formas de pagamento na Escrituração (TED, Adiantamento) com dados bancários</li>
+      <li>Anexos ampliados para 20MB, com arrastar-e-soltar no formulário</li>
+      <li>Transferência de chamados entre atendentes com aviso automático por e-mail</li>
+      <li>Bloqueio de fornecedores/CNPJs problemáticos antes que os dados cheguem ao sistema</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">03</div>
+    <div>
+      <div class="title-row">
+        <h3>NotaFinder</h3>
+        <span class="tag">Notas fiscais</span>
+      </div>
+    </div>
+    <p class="lede">Consulta de NFe, NFSe e CTe. Começou como uma funcionalidade dentro do Nexus e virou um produto próprio, com repositório e painel de gestão dedicados.</p>
+    <ul>
+      <li>Dashboard próprio para acompanhar status e pendências das notas fiscais</li>
+      <li>Sincronização manual sob demanda, sem esperar o ciclo automático</li>
+      <li>Correções no cadastro de certificados digitais (tela travava, datas apareciam erradas)</li>
+      <li>Notas já finalizadas no Sienge saem da fila do Nexus automaticamente, evitando retrabalho</li>
+      <li>Acesso às páginas passou a exigir autorização — reforço de segurança</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">04</div>
+    <div>
+      <div class="title-row">
+        <h3>RoshSign</h3>
+        <span class="tag">Assinatura digital</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Ganhou mais autonomia para os usuários e mais controle para os administradores.</p>
+    <ul>
+      <li>Painel administrativo completo: quem pode criar documentos, busca e gestão centralizadas</li>
+      <li>E-mail automático avisando o motivo quando alguém recusa assinar um documento</li>
+      <li>Correção visual dos campos do PDF (assinatura, CPF, data) — antes ficavam desalinhados</li>
+      <li>Documentos longos deixaram de travar a tela ao abrir</li>
+      <li>Links de assinatura enviados por WhatsApp/e-mail pararam de quebrar quando cortados</li>
+      <li><strong>Integração com o Inventário de TI:</strong> ao cadastrar um equipamento, o termo de responsabilidade é gerado e enviado para assinatura automaticamente</li>
+      <li>Correção de bug onde signatários já removidos continuavam aparecendo na lista</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">05</div>
+    <div>
+      <div class="title-row">
+        <h3>Access Control</h3>
+        <span class="tag">Acesso às obras</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Reforço de segurança no controle de quem entra em cada obra.</p>
+    <ul>
+      <li><strong>Ao desligar um colaborador, o acesso dele a todas as obras é revogado automaticamente</strong> — antes precisava tirar manualmente obra por obra</li>
+      <li>Alertas automáticos de treinamentos e exames vencendo em 30 dias</li>
+      <li>Busca de colaboradores por CPF, com validação para bloquear cadastros duplicados</li>
+      <li>Exportação de relatórios em Excel e PDF por empresa, obra e colaborador</li>
+      <li>Dashboard em tempo real com monitoramento de acessos por obra</li>
+      <li>Upload de anexos mais robusto, limite ampliado para 15MB</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">06</div>
+    <div>
+      <div class="title-row">
+        <h3>RoshCheck</h3>
+        <span class="tag">Vistorias</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Ganhou um módulo novo e importante: indicadores de qualidade.</p>
+    <ul>
+      <li><strong>Novo sistema de indicadores:</strong> cada fornecedor e obra recebe uma nota de qualidade ponderada, com dashboard comparativo — antes essa avaliação não existia de forma estruturada</li>
+      <li>Indicador automático de conformidade de treinamentos e exames, conectado ao Access Control</li>
+      <li>Relatórios em PDF com a logo da Rosh, prontos para apresentação a diretoria e clientes</li>
+      <li>Novos tipos de ficha: Segurança do Trabalho, Projetos, Relatórios Técnicos</li>
+      <li>Rascunho offline no aplicativo — funciona mesmo sem internet na obra</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">07</div>
+    <div>
+      <div class="title-row">
+        <h3>Inventário de TI</h3>
+        <span class="tag">Equipamentos</span>
+      </div>
+    </div>
+    <p class="lede">Projeto que estava sob domínio do Gustavo (funcionário anterior) — hoje 100% migrado e sob controle da Rosh. Ganhou um recurso novo de localização física da frota.</p>
+    <ul>
+      <li><strong>Localização em tempo real dos notebooks da empresa</strong>, com opção de localizar a frota inteira com um clique</li>
+      <li>Mapa consolidado com a posição de cada equipamento, atualizado individualmente</li>
+      <li>Limpeza automática: equipamentos que saíram da empresa somem da lista sozinhos</li>
+      <li>Envio automático do termo de responsabilidade para assinatura ao cadastrar um equipamento, via RoshSign</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">08</div>
+    <div>
+      <div class="title-row">
+        <h3>Login Unificado</h3>
+        <span class="tag">Acesso</span>
+      </div>
+    </div>
+    <ul>
+      <li>Tela de login redesenhada, priorizando o acesso único via conta Microsoft da empresa</li>
+      <li>Correção no redirecionamento: o usuário volta para onde estava, em vez de sempre cair na tela principal</li>
+    </ul>
+  </div>
+
+  <div class="system">
+    <div class="num">09</div>
+    <div>
+      <div class="title-row">
+        <h3>Projetos novos do período</h3>
+        <span class="tag">Em construção</span>
+      </div>
+    </div>
+    <ul>
+      <li><strong>searchTitle:</strong> nova ferramenta de consulta de notas fiscais relacionadas</li>
+      <li><strong>ProdutoFiscal</strong> e <strong>Auth_Sienge:</strong> bases criadas, preparando as próximas integrações fiscais com o Sienge</li>
+    </ul>
+  </div>
+
+  <div class="ged">
+    <p class="label">Também em desenvolvimento agora · projeto pessoal, fora do escopo da Rosh</p>
+    <p>Em paralelo a tudo isso, Eduardo está construindo o <strong>Sistema GED</strong> — gestão eletrônica de documentos (organização, busca e controle de documentos corporativos). <strong>Diferente dos 10 sistemas acima, este é um projeto pessoal de Eduardo, feito por conta própria</strong> — não faz parte do escopo de trabalho da Rosh nem é de propriedade da empresa.</p>
+  </div>
+
+  <div class="numbers-section">
+    <h2>Impacto em números</h2>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>O que foi feito</th><th>Quantidade</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Sistemas mantidos, melhorados ou criados</td><td>10</td></tr>
+          <tr><td>Entregas realizadas (features + correções)</td><td>~200</td></tr>
+          <tr><td>Período total</td><td>74 dias</td></tr>
+          <tr><td>Sistemas herdados de pé e melhorados</td><td>6 de 6</td></tr>
+          <tr><td>Sistemas novos criados no período</td><td>3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>Destaques principais</h2>
+
+  <ol class="highlights">
+    <li><strong>Nome novo do portal, escolhido pela empresa:</strong> votação ao vivo construída do zero elegeu "Rosh Comunicados" — da enquete até a apuração em tempo real.</li>
+    <li><strong>NotaFinder virou produto próprio:</strong> saiu de dentro do sistema de chamados e ganhou dashboard de gestão dedicado.</li>
+    <li><strong>Novo sistema de indicadores de qualidade no RoshCheck:</strong> primeira vez que fornecedores e obras são avaliados com nota estruturada e relatório em PDF.</li>
+    <li><strong>Segurança reforçada no Access Control:</strong> desligar um colaborador agora revoga o acesso dele em todas as obras automaticamente — antes dependia de ação manual.</li>
+    <li><strong>RoshSign mais completo:</strong> aviso automático de recusa, links que não quebram no WhatsApp, e integração direta com o Inventário de TI.</li>
+  </ol>
+
+</div>
+</div>
+</body>
+</html>

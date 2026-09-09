@@ -14,13 +14,21 @@ import { sendPushToUser } from "@/lib/push";
 import { canAccessBoard } from "@/lib/workspace";
 
 /**
- * Converte uma data "YYYY-MM-DD" (vinda do <input type="date">) em meia-noite LOCAL,
- * não UTC. `new Date("2026-09-04")` é sempre meia-noite UTC pela spec do JS — num fuso
- * atrás de UTC (ex.: Brasil) isso volta pro dia anterior ao formatar com hora local em
- * qualquer lugar do app (calendário, cronograma, etc.), fazendo o prazo "errar o dia".
+ * Converte uma data "YYYY-MM-DD" (vinda do <input type="date">) em meia-noite de
+ * Brasília, sempre — nunca "meia-noite local do servidor". `new Date("2026-09-04")` é
+ * meia-noite UTC pela spec do JS, e usar a hora local do processo Node depende de o
+ * servidor estar configurado no fuso certo (frágil: em produção costuma rodar em UTC).
+ * Fixando o offset -03:00 (Brasília não observa horário de verão desde 2019), o prazo
+ * bate com o dia certo em qualquer lugar do app independente de onde o servidor roda.
  */
 function parseDateOnly(value: string): Date {
-  return new Date(`${value}T00:00:00`);
+  return new Date(`${value}T00:00:00-03:00`);
+}
+
+/** Data de hoje em Brasília, no formato "YYYY-MM-DD" — usada para dar um valor padrão
+ * à data de início de um card recém-criado sem depender do fuso horário do servidor. */
+function todayInBrasilia(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 
 /** Confirma acesso ao board (membro do workspace + visibilidade de departamento) —
@@ -36,6 +44,7 @@ const createCardSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  startDate: z.string().optional(),
   dueDate: z.string().optional(),
   columnId: z.string(),
   boardId: z.string(),
@@ -51,6 +60,7 @@ const updateCardSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).optional(),
   columnId: z.string().optional(), // mover entre colunas
   order: z.number().optional(),
+  startDate: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   completionNotes: z.string().optional(),
   completedAt: z.string().optional().nullable(),
@@ -94,18 +104,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { title, description, priority, dueDate, columnId, boardId, order, assignedToId } = parsed.data;
+    const { title, description, priority, startDate, dueDate, columnId, boardId, order, assignedToId } = parsed.data;
 
     if (!(await assertBoardAccess(session.user.id, boardId))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
+    // Sem data de início explícita, assume que a tarefa começa hoje (Brasília) — o
+    // usuário só precisa mexer nisso quando o começo real for outro dia.
     const [card] = await db
       .insert(kanbanCards)
       .values({
         title,
         description,
         priority,
+        startDate: parseDateOnly(startDate || todayInBrasilia()),
         dueDate: dueDate ? parseDateOnly(dueDate) : undefined,
         columnId,
         boardId,
@@ -169,6 +182,7 @@ export async function PATCH(req: NextRequest) {
     if (updates.order !== undefined) updateData.order = updates.order;
     if (updates.completionNotes) updateData.completionNotes = updates.completionNotes;
     if (updates.assignedToId !== undefined) updateData.assignedToId = updates.assignedToId;
+    if (updates.startDate !== undefined) updateData.startDate = updates.startDate ? parseDateOnly(updates.startDate) : null;
     if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? parseDateOnly(updates.dueDate) : null;
 
     if (updates.status === "done" && !updates.completedAt) {

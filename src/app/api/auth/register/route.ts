@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     // Cria usuário
     const [user] = await db
       .insert(users)
-      .values({ name, email, password: hashedPassword })
+      .values({ name, email, password: hashedPassword, hasOnboarded: false })
       .returning();
 
     // Cadastro por e-mail/senha não prova dono do e-mail (sem verificação) — nunca

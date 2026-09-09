@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  X, CheckCircle2, Clock, Flag, Paperclip,
-  MessageSquare, Loader2, ChevronDown, Upload, Trash2,
+  X, CheckCircle2, Circle, Clock, Flag, Paperclip,
+  MessageSquare, Loader2, ChevronDown, Upload, Trash2, Plus,
 } from "lucide-react";
 import { cn, priorityConfig, formatDateTime, initials } from "@/lib/utils";
-import type { KanbanCardWithDetails } from "@/types";
+import type { CardSubtask, KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
@@ -44,6 +44,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
+  const [startDate, setStartDate] = useState(toDateInputValue(card.startDate));
   const [dueDate, setDueDate] = useState(toDateInputValue(card.dueDate));
   const [assignedToId, setAssignedToId] = useState(card.assignedToId ?? "");
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -56,6 +57,9 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [subtasks, setSubtasks] = useState<CardSubtask[]>(card.subtasks ?? []);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
 
   useEffect(() => {
     fetch(`/api/workspaces/members?workspaceId=${workspaceId}`)
@@ -121,6 +125,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
           title,
           description,
           priority,
+          startDate: startDate || null,
           dueDate: dueDate || null,
           assignedToId: assignedToId || null,
         }),
@@ -128,7 +133,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
       const { data } = await res.json();
       if (!res.ok) throw new Error();
       const assignedTo = members.find((m) => m.id === assignedToId) ?? null;
-      onUpdate({ ...card, ...data, attachments, comments, assignedTo });
+      onUpdate({ ...card, ...data, attachments, comments, subtasks, assignedTo });
       toast.success("Card salvo!");
     } catch {
       toast.error("Erro ao salvar card");
@@ -152,7 +157,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
       });
       const { data } = await res.json();
       if (!res.ok) throw new Error();
-      onUpdate({ ...card, ...data, attachments, comments });
+      onUpdate({ ...card, ...data, attachments, comments, subtasks });
       toast.success(isDone ? "Card reaberto!" : "Card concluído! 🎉");
     } catch {
       toast.error("Erro ao atualizar status");
@@ -197,6 +202,53 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
     }
   }
 
+  async function handleAddSubtask() {
+    if (!newSubtask.trim()) return;
+    setAddingSubtask(true);
+    try {
+      const res = await fetch("/api/kanban/cards/subtasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: card.id, title: newSubtask.trim(), order: subtasks.length }),
+      });
+      if (!res.ok) throw new Error();
+      const { data } = await res.json();
+      setSubtasks((prev) => [...prev, data]);
+      setNewSubtask("");
+    } catch {
+      toast.error("Erro ao adicionar subtarefa");
+    } finally {
+      setAddingSubtask(false);
+    }
+  }
+
+  async function handleToggleSubtask(subtaskId: string, isDone: boolean) {
+    setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, isDone } : s)));
+    try {
+      const res = await fetch("/api/kanban/cards/subtasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: subtaskId, isDone }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, isDone: !isDone } : s)));
+      toast.error("Erro ao atualizar subtarefa");
+    }
+  }
+
+  async function handleDeleteSubtask(subtaskId: string) {
+    const prev = subtasks;
+    setSubtasks((p) => p.filter((s) => s.id !== subtaskId));
+    try {
+      const res = await fetch(`/api/kanban/cards/subtasks?id=${subtaskId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      setSubtasks(prev);
+      toast.error("Erro ao excluir subtarefa");
+    }
+  }
+
   return (
     <>
       {/* Overlay */}
@@ -209,28 +261,44 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
       <div className="fixed inset-y-0 right-0 w-full max-w-lg bg-card border-l border-border z-50 flex flex-col animate-slide-in-right overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border">
-          <div className="flex-1 mr-4">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full text-lg font-semibold bg-transparent focus:outline-none border-b border-transparent focus:border-primary transition-colors pb-0.5"
-            />
-            <div className="flex items-center gap-2 mt-2">
-              <span
-                className={cn(
-                  "text-xs px-2 py-0.5 rounded-full font-medium",
-                  isDone
-                    ? "bg-emerald-400/10 text-emerald-400"
-                    : "bg-primary/10 text-primary"
-                )}
-              >
-                {isDone ? "✓ Concluído" : "Em andamento"}
-              </span>
-              {card.completedAt && (
-                <span className="text-xs text-muted-foreground">
-                  {formatDateTime(card.completedAt)}
-                </span>
+          <div className="flex items-start gap-3 flex-1 mr-4">
+            <button
+              onClick={handleComplete}
+              disabled={completing}
+              title={isDone ? "Reabrir tarefa" : "Marcar como concluída"}
+              className="shrink-0 mt-1"
+            >
+              {completing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              ) : isDone ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <Circle className="w-5 h-5 text-muted-foreground hover:text-primary transition-colors" />
               )}
+            </button>
+            <div className="flex-1 min-w-0">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full text-lg font-semibold bg-transparent focus:outline-none border-b border-transparent focus:border-primary transition-colors pb-0.5"
+              />
+              <div className="flex items-center gap-2 mt-2">
+                <span
+                  className={cn(
+                    "text-xs px-2 py-0.5 rounded-full font-medium",
+                    isDone
+                      ? "bg-emerald-400/10 text-emerald-400"
+                      : "bg-primary/10 text-primary"
+                  )}
+                >
+                  {isDone ? "✓ Concluído" : "Em andamento"}
+                </span>
+                {card.completedAt && (
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(card.completedAt)}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button
@@ -291,13 +359,26 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
                 </div>
               </div>
 
-              {/* Responsável + Prazo */}
+              {/* Responsável */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Responsável
+                </label>
+                <AssigneeSelect members={members} value={assignedToId} onChange={setAssignedToId} />
+              </div>
+
+              {/* Início + Prazo */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                    Responsável
+                    Início
                   </label>
-                  <AssigneeSelect members={members} value={assignedToId} onChange={setAssignedToId} />
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full h-9 bg-background border border-border rounded-lg px-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
@@ -308,6 +389,60 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                     className="w-full h-9 bg-background border border-border rounded-lg px-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Subtasks */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider block">
+                    Subtarefas
+                  </label>
+                  {subtasks.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {subtasks.filter((s) => s.isDone).length}/{subtasks.length}
+                    </span>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {subtasks.map((s) => (
+                    <div key={s.id} className="group flex items-center gap-2 py-1">
+                      <button onClick={() => handleToggleSubtask(s.id, !s.isDone)} className="shrink-0">
+                        {s.isDone ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+                        )}
+                      </button>
+                      <span
+                        className={cn(
+                          "flex-1 text-sm",
+                          s.isDone && "line-through text-muted-foreground"
+                        )}
+                      >
+                        {s.title}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteSubtask(s.id)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <input
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddSubtask();
+                    }}
+                    disabled={addingSubtask}
+                    placeholder="Adicionar subtarefa…"
+                    className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/60 py-1"
                   />
                 </div>
               </div>
