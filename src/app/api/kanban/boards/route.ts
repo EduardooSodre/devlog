@@ -50,8 +50,13 @@ export async function GET(req: NextRequest) {
         columns: {
           with: {
             cards: {
+              // "private" só aparece pra quem criou ou é o responsável, mesmo com
+              // acesso ao board — ver comentário na coluna `visibility` do schema.
+              where: (c, { eq, or }) =>
+                or(eq(c.visibility, "public"), eq(c.createdById, session.user.id), eq(c.assignedToId, session.user.id)),
               with: {
                 assignedTo: { columns: { id: true, name: true, image: true } },
+                createdBy: { columns: { id: true, name: true, image: true } },
                 attachments: true,
                 comments: {
                   with: { author: { columns: { id: true, name: true, image: true } } },
@@ -59,6 +64,10 @@ export async function GET(req: NextRequest) {
                 },
                 subtasks: {
                   orderBy: (s, { asc }) => [asc(s.order)],
+                  with: { assignedTo: { columns: { id: true, name: true, image: true } } },
+                },
+                linkedBoards: {
+                  with: { board: { columns: { id: true, name: true, color: true } } },
                 },
               },
               orderBy: (c, { asc }) => [asc(c.order)],

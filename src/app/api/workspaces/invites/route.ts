@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { workspaceInvites, workspaces, departments } from "@/lib/db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { getActiveWorkspace, verifyWorkspaceAccess, checkPlanLimit } from "@/lib/workspace";
-import { sendMail } from "@/lib/mail";
+import { sendMail, escapeHtml } from "@/lib/mail";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 
@@ -105,13 +105,18 @@ export async function POST(req: Request) {
     const workspace = await db.query.workspaces.findFirst({ where: eq(workspaces.id, wsId) });
     const inviterName = session.user.name ?? session.user.email ?? "Alguém";
     const destination = department ? `${workspace?.name} · ${department.name}` : workspace?.name;
+    // inviterName e destination são texto livre (nome de exibição, nome de workspace/
+    // departamento) definido pelo próprio usuário — sem escapar, alguém poderia colocar
+    // markup/tags no nome e injetar HTML arbitrário no e-mail de quem for convidado.
+    const safeInviterName = escapeHtml(inviterName);
+    const safeDestination = escapeHtml(destination ?? "");
     const emailSent = await sendMail({
       to: invite.email,
       subject: `${inviterName} te convidou para o ${destination} no DevLog`,
       html: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
           <h2>Você foi convidado(a)!</h2>
-          <p><strong>${inviterName}</strong> te convidou para participar de <strong>${destination}</strong> no DevLog.</p>
+          <p><strong>${safeInviterName}</strong> te convidou para participar de <strong>${safeDestination}</strong> no DevLog.</p>
           <p style="margin: 24px 0;">
             <a href="${inviteUrl}" style="background:#4f6ef7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Aceitar convite</a>
           </p>

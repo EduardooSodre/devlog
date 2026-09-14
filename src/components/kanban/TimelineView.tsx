@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { eachDayOfInterval, differenceInCalendarDays, format, isToday, isSameMonth, addDays, max as dateMax, min as dateMin } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { GanttChartSquare, UserCircle2 } from "lucide-react";
-import { cn, priorityConfig, initials } from "@/lib/utils";
+import { cn, priorityConfig, difficultyConfig, initials } from "@/lib/utils";
 import type { KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 
 function Assignee({ card, className }: { card: KanbanCardWithDetails; className?: string }) {
@@ -46,7 +46,6 @@ export function TimelineView({ columns, onCardClick }: Props) {
         (col.cards ?? []).map((c) => ({
           card: c,
           columnName: col.name,
-          columnColor: col.color || "#4f6ef7",
           start: new Date(c.startDate ?? c.createdAt),
           end: c.dueDate ? new Date(c.dueDate) : addDays(new Date(c.startDate ?? c.createdAt), 1),
         }))
@@ -80,6 +79,15 @@ export function TimelineView({ columns, onCardClick }: Props) {
 
   return (
     <div className="p-6">
+      <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
+        <span className="text-[11px] text-muted-foreground">Cor da barra = dificuldade:</span>
+        {(Object.keys(difficultyConfig) as (keyof typeof difficultyConfig)[]).map((key) => (
+          <span key={key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: difficultyConfig[key].hex }} />
+            {difficultyConfig[key].label}
+          </span>
+        ))}
+      </div>
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ width: LABEL_WIDTH + gridWidth, minWidth: "100%" }}>
@@ -117,12 +125,13 @@ export function TimelineView({ columns, onCardClick }: Props) {
                 />
               )}
 
-              {rows.map(({ card, columnName, columnColor, start, end }, idx) => {
+              {rows.map(({ card, columnName, start, end }, idx) => {
                 const offset = Math.max(0, differenceInCalendarDays(start, rangeStart));
                 const span = Math.max(1, differenceInCalendarDays(end, start) + 1);
                 const barWidth = span * DAY_WIDTH - 8;
                 const tooShort = barWidth < 90;
                 const tooNarrowForAvatar = barWidth < 56;
+                const difficultyColor = difficultyConfig[card.difficulty].hex;
 
                 return (
                   <div
@@ -146,13 +155,13 @@ export function TimelineView({ columns, onCardClick }: Props) {
                         style={{
                           left: offset * DAY_WIDTH + 4,
                           width: barWidth,
-                          background: `linear-gradient(135deg, ${columnColor}, ${columnColor}cc)`,
+                          background: `linear-gradient(135deg, ${difficultyColor}, ${difficultyColor}cc)`,
                         }}
                         className={cn(
                           "absolute top-1/2 -translate-y-1/2 h-8 rounded-full text-[11px] font-medium text-white flex items-center gap-1.5 shadow-md ring-1 ring-black/5 transition-transform hover:scale-[1.03] hover:shadow-lg",
                           tooNarrowForAvatar ? "justify-center px-1.5" : "pl-1 pr-2.5"
                         )}
-                        title={`${card.title}${card.assignedTo?.name ? " · " + card.assignedTo.name : ""}`}
+                        title={`${card.title} · ${difficultyConfig[card.difficulty].label}${card.assignedTo?.name ? " · " + card.assignedTo.name : ""}`}
                       >
                         {tooNarrowForAvatar ? (
                           <span className={cn("w-2 h-2 rounded-full shrink-0 ring-1 ring-white/40", priorityConfig[card.priority].dot)} />

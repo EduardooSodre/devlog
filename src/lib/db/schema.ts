@@ -31,6 +31,8 @@ export const planEnum = pgEnum("plan", ["free", "pro", "enterprise"]);
 export const memberRoleEnum = pgEnum("member_role", ["owner", "admin", "member"]);
 export const cardPriorityEnum = pgEnum("card_priority", ["low", "medium", "high", "urgent"]);
 export const cardStatusEnum = pgEnum("card_status", ["todo", "in_progress", "done", "cancelled"]);
+export const cardVisibilityEnum = pgEnum("card_visibility", ["private", "public"]);
+export const cardDifficultyEnum = pgEnum("card_difficulty", ["easy", "medium", "hard", "very_hard"]);
 export const docTypeEnum = pgEnum("doc_type", [
   "refactoring",   // Refatoração (antes/depois)
   "feature",       // Nova funcionalidade
@@ -307,6 +309,7 @@ export const kanbanCards = pgTable(
     title: text("title").notNull(),
     description: text("description"), // HTML do TipTap
     priority: cardPriorityEnum("priority").notNull().default("medium"),
+    difficulty: cardDifficultyEnum("difficulty").notNull().default("medium"),
     status: cardStatusEnum("status").notNull().default("todo"),
     order: integer("order").notNull().default(0),
     startDate: timestamp("start_date", { mode: "date" }),
@@ -317,6 +320,10 @@ export const kanbanCards = pgTable(
     createdById: text("created_by_id")
       .notNull()
       .references(() => users.id),
+    // "private": só quem criou + responsável enxergam, mesmo tendo acesso ao board.
+    // "public": qualquer membro com acesso ao board enxerga (comportamento de sempre —
+    // default, pra não esconder retroativamente cards que já existiam antes disso existir).
+    visibility: cardVisibilityEnum("visibility").notNull().default("public"),
     isArchived: boolean("is_archived").notNull().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
@@ -377,10 +384,32 @@ export const cardSubtasks = pgTable(
     title: text("title").notNull(),
     isDone: boolean("is_done").notNull().default(false),
     order: integer("order").notNull().default(0),
+    dueDate: timestamp("due_date", { mode: "date" }),
+    assignedToId: text("assigned_to_id").references(() => users.id),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => ({
     cardIdx: index("subtasks_card_idx").on(table.cardId),
+  })
+);
+
+// Board "extra" ao qual um card também está vinculado, além do board dono (kanbanCards.boardId
+// /columnId continuam definindo a posição real no quadro) — cobre "esta tarefa também faz parte
+// do projeto X". Não aparece nas colunas do board extra, só como referência no card.
+export const cardBoards = pgTable(
+  "card_boards",
+  {
+    cardId: text("card_id")
+      .notNull()
+      .references(() => kanbanCards.id, { onDelete: "cascade" }),
+    boardId: text("board_id")
+      .notNull()
+      .references(() => kanbanBoards.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.cardId, table.boardId] }),
+    boardIdx: index("card_boards_board_idx").on(table.boardId),
   })
 );
 
@@ -588,6 +617,7 @@ export const kanbanCardsRelations = relations(kanbanCards, ({ one, many }) => ({
   attachments: many(cardAttachments),
   comments: many(cardComments),
   subtasks: many(cardSubtasks),
+  linkedBoards: many(cardBoards),
   tags: many(cardTags),
   assignedTo: one(users, {
     fields: [kanbanCards.assignedToId],
@@ -651,6 +681,21 @@ export const cardSubtasksRelations = relations(cardSubtasks, ({ one }) => ({
   card: one(kanbanCards, {
     fields: [cardSubtasks.cardId],
     references: [kanbanCards.id],
+  }),
+  assignedTo: one(users, {
+    fields: [cardSubtasks.assignedToId],
+    references: [users.id],
+  }),
+}));
+
+export const cardBoardsRelations = relations(cardBoards, ({ one }) => ({
+  card: one(kanbanCards, {
+    fields: [cardBoards.cardId],
+    references: [kanbanCards.id],
+  }),
+  board: one(kanbanBoards, {
+    fields: [cardBoards.boardId],
+    references: [kanbanBoards.id],
   }),
 }));
 

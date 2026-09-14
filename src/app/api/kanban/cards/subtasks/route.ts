@@ -1,6 +1,6 @@
 /**
  * POST /api/kanban/cards/subtasks — Cria subtarefa
- * PATCH /api/kanban/cards/subtasks — Atualiza (título/concluída)
+ * PATCH /api/kanban/cards/subtasks — Atualiza (título/concluída/responsável/prazo)
  * DELETE /api/kanban/cards/subtasks?id=xxx — Remove subtarefa
  */
 
@@ -11,6 +11,7 @@ import { cardSubtasks, kanbanCards, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { canAccessBoard } from "@/lib/workspace";
+import { sendPushToUser } from "@/lib/push";
 
 /** Mesmo padrão de checagem de acesso usado em comments/attachments — sem isso,
  * qualquer usuário autenticado poderia ler/escrever subtarefas de cards de outros
@@ -22,7 +23,23 @@ async function assertCardAccess(userId: string, cardId: string) {
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
   if (!board) return null;
 
-  return (await canAccessBoard(userId, board)) ? card : null;
+  return (await canAccessBoard(userId, board)) ? { card, board } : null;
+}
+
+/** Mesmo motivo do `parseDateOnly` em cards/route.ts — fixa Brasília em vez da hora
+ * local do processo, que em produção costuma ser UTC. */
+function parseDateOnly(value: string): Date {
+  return new Date(`${value}T00:00:00-03:00`);
+}
+
+async function notifySubtaskAssignee(cardTitle: string, subtaskTitle: string, boardId: string, assignedToId: string, actorId: string) {
+  if (assignedToId === actorId) return;
+  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
+  await sendPushToUser(assignedToId, {
+    title: `Subtarefa atribuída a você em "${cardTitle}"`,
+    body: subtaskTitle,
+    url: board ? `/projetos?board=${board.id}` : "/projetos",
+  });
 }
 
 const createSchema = z.object({
@@ -35,6 +52,8 @@ const updateSchema = z.object({
   id: z.string(),
   title: z.string().min(1).max(200).optional(),
   isDone: z.boolean().optional(),
+  dueDate: z.string().optional().nullable(),
+  assignedToId: z.string().optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -69,16 +88,25 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { id, ...updates } = parsed.data;
+  const { id, dueDate, ...rest } = parsed.data;
   const existing = await db.query.cardSubtasks.findFirst({ where: eq(cardSubtasks.id, id) });
   if (!existing) {
     return NextResponse.json({ error: "Subtarefa não encontrada" }, { status: 404 });
   }
-  if (!(await assertCardAccess(session.user.id, existing.cardId))) {
+  const access = await assertCardAccess(session.user.id, existing.cardId);
+  if (!access) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 
-  const [updated] = await db.update(cardSubtasks).set(updates).where(eq(cardSubtasks.id, id)).returning();
+  const updateData: Partial<typeof cardSubtasks.$inferInsert> = { ...rest };
+  if (dueDate !== undefined) updateData.dueDate = dueDate ? parseDateOnly(dueDate) : null;
+
+  const [updated] = await db.update(cardSubtasks).set(updateData).where(eq(cardSubtasks.id, id)).returning();
+
+  if (rest.assignedToId && rest.assignedToId !== existing.assignedToId) {
+    await notifySubtaskAssignee(access.card.title, updated.title, access.card.boardId, rest.assignedToId, session.user.id);
+  }
+
   return NextResponse.json({ success: true, data: updated });
 }
 

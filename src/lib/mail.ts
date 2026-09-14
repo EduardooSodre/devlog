@@ -6,6 +6,18 @@
 
 import nodemailer from "nodemailer";
 
+/** Escapa valores interpolados em HTML de e-mail — nome de usuário e nomes de
+ * workspace/departamento são texto livre definido pelo próprio usuário, então
+ * entram em `sendMail({ html })` sem escape nenhum se o chamador não cuidar disso. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
 function getTransporter() {
@@ -34,7 +46,9 @@ export async function sendMail(opts: { to: string; subject: string; html: string
     await t.sendMail({
       from: `DevLog <${process.env.GMAIL_USER}>`,
       to: opts.to,
-      subject: opts.subject,
+      // Remove quebras de linha — texto livre (nome do convidador, do workspace) cai
+      // aqui, e CR/LF num header SMTP permite injetar headers extras (ex.: Bcc: oculto).
+      subject: opts.subject.replace(/[\r\n]+/g, " "),
       html: opts.html,
     });
     return true;

@@ -109,6 +109,43 @@ export const priorityConfig = {
   },
 } as const;
 
+// Cores separadas da Prioridade (azul→roxo em vez de verde→vermelho) — os dois campos
+// aparecem lado a lado no card, então precisam ser visualmente distinguíveis à primeira vista.
+export const difficultyConfig = {
+  easy: {
+    label: "Fácil",
+    color: "text-sky-400",
+    bg: "bg-sky-400/10",
+    border: "border-sky-400/30",
+    dot: "bg-sky-400",
+    hex: "#38bdf8",
+  },
+  medium: {
+    label: "Média",
+    color: "text-blue-400",
+    bg: "bg-blue-400/10",
+    border: "border-blue-400/30",
+    dot: "bg-blue-400",
+    hex: "#60a5fa",
+  },
+  hard: {
+    label: "Difícil",
+    color: "text-violet-400",
+    bg: "bg-violet-400/10",
+    border: "border-violet-400/30",
+    dot: "bg-violet-400",
+    hex: "#a78bfa",
+  },
+  very_hard: {
+    label: "Muito difícil",
+    color: "text-fuchsia-400",
+    bg: "bg-fuchsia-400/10",
+    border: "border-fuchsia-400/30",
+    dot: "bg-fuchsia-400",
+    hex: "#e879f9",
+  },
+} as const;
+
 export const docTypeConfig = {
   refactoring: {
     label: "Refatoração",

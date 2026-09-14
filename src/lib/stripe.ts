@@ -81,6 +81,13 @@ export async function createCheckoutSession({
     subscription_data: {
       metadata: { workspaceId, plan },
     },
+    // Nota: Stripe Tax não calcula impostos brasileiros (ICMS/ISS/PIS/COFINS) — só
+    // cobre os países da lista de suporte (US, UE, UK, Canadá etc). Aqui isso só
+    // coleta endereço/CNPJ do cliente; sem registro fiscal em país suportado, o
+    // imposto calculado fica zerado.
+    automatic_tax: { enabled: true },
+    tax_id_collection: { enabled: true },
+    customer_update: { address: "auto", name: "auto" },
   });
 }
 

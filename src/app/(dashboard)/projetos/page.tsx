@@ -28,17 +28,28 @@ export default async function ProjetosPage() {
             orderBy: (c, { asc }) => [asc(c.order)],
             with: {
               cards: {
-                where: (c, { eq }) => eq(c.isArchived, false),
+                // "private" só aparece pra quem criou ou é o responsável, mesmo com
+                // acesso ao board — ver comentário na coluna `visibility` do schema.
+                where: (c, { eq, and, or }) =>
+                  and(
+                    eq(c.isArchived, false),
+                    or(eq(c.visibility, "public"), eq(c.createdById, userId), eq(c.assignedToId, userId))
+                  ),
                 orderBy: (c, { asc }) => [asc(c.order)],
                 with: {
                   attachments: true,
                   assignedTo: { columns: { id: true, name: true, image: true } },
+                  createdBy: { columns: { id: true, name: true, image: true } },
                   comments: {
                     with: { author: { columns: { id: true, name: true, image: true } } },
                     orderBy: (c, { asc }) => [asc(c.createdAt)],
                   },
                   subtasks: {
                     orderBy: (s, { asc }) => [asc(s.order)],
+                    with: { assignedTo: { columns: { id: true, name: true, image: true } } },
+                  },
+                  linkedBoards: {
+                    with: { board: { columns: { id: true, name: true, color: true } } },
                   },
                 },
               },

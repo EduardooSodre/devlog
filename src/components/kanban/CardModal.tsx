@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import {
   X, CheckCircle2, Circle, Clock, Flag, Paperclip,
   MessageSquare, Loader2, ChevronDown, Upload, Trash2, Plus,
+  Lock, Globe, Kanban, Search, CalendarDays, UserCircle2,
 } from "lucide-react";
-import { cn, priorityConfig, formatDateTime, initials } from "@/lib/utils";
-import type { CardSubtask, KanbanCardWithDetails } from "@/types";
+import { cn, priorityConfig, difficultyConfig, formatDate, formatDateTime, initials } from "@/lib/utils";
+import type { CardSubtaskWithDetails, KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
@@ -19,15 +20,23 @@ interface WorkspaceMember {
   image: string | null;
 }
 
+interface BoardOption {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 interface Props {
   card: KanbanCardWithDetails;
   workspaceId: string;
+  allBoards: BoardOption[];
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
   onDelete: (cardId: string) => void;
 }
 
 const priorities = ["low", "medium", "high", "urgent"] as const;
+const difficulties = ["easy", "medium", "hard", "very_hard"] as const;
 
 function toDateInputValue(date: Date | string | null | undefined): string {
   if (!date) return "";
@@ -40,10 +49,11 @@ function toDateInputValue(date: Date | string | null | undefined): string {
   return `${year}-${month}-${day}`;
 }
 
-export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Props) {
+export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onDelete }: Props) {
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
+  const [difficulty, setDifficulty] = useState(card.difficulty);
   const [startDate, setStartDate] = useState(toDateInputValue(card.startDate));
   const [dueDate, setDueDate] = useState(toDateInputValue(card.dueDate));
   const [assignedToId, setAssignedToId] = useState(card.assignedToId ?? "");
@@ -57,9 +67,15 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [subtasks, setSubtasks] = useState<CardSubtask[]>(card.subtasks ?? []);
+  const [subtasks, setSubtasks] = useState<CardSubtaskWithDetails[]>(card.subtasks ?? []);
   const [newSubtask, setNewSubtask] = useState("");
   const [addingSubtask, setAddingSubtask] = useState(false);
+  const [expandedSubtaskId, setExpandedSubtaskId] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState(card.visibility);
+  const [savingVisibility, setSavingVisibility] = useState(false);
+  const [linkedBoards, setLinkedBoards] = useState(card.linkedBoards ?? []);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
 
   useEffect(() => {
     fetch(`/api/workspaces/members?workspaceId=${workspaceId}`)
@@ -125,6 +141,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
           title,
           description,
           priority,
+          difficulty,
           startDate: startDate || null,
           dueDate: dueDate || null,
           assignedToId: assignedToId || null,
@@ -133,7 +150,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
       const { data } = await res.json();
       if (!res.ok) throw new Error();
       const assignedTo = members.find((m) => m.id === assignedToId) ?? null;
-      onUpdate({ ...card, ...data, attachments, comments, subtasks, assignedTo });
+      onUpdate({ ...card, ...data, attachments, comments, subtasks, linkedBoards, assignedTo });
       toast.success("Card salvo!");
     } catch {
       toast.error("Erro ao salvar card");
@@ -157,7 +174,7 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
       });
       const { data } = await res.json();
       if (!res.ok) throw new Error();
-      onUpdate({ ...card, ...data, attachments, comments, subtasks });
+      onUpdate({ ...card, ...data, attachments, comments, subtasks, linkedBoards });
       toast.success(isDone ? "Card reaberto!" : "Card concluído! 🎉");
     } catch {
       toast.error("Erro ao atualizar status");
@@ -249,6 +266,97 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
     }
   }
 
+  async function handleSetSubtaskAssignee(subtaskId: string, userId: string) {
+    const prev = subtasks;
+    const assignedTo = members.find((m) => m.id === userId) ?? null;
+    setSubtasks((p) => p.map((s) => (s.id === subtaskId ? { ...s, assignedToId: userId || null, assignedTo } : s)));
+    try {
+      const res = await fetch("/api/kanban/cards/subtasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: subtaskId, assignedToId: userId || null }),
+      });
+      if (!res.ok) throw new Error();
+      if (userId) toast.success("Responsável notificado!");
+    } catch {
+      setSubtasks(prev);
+      toast.error("Erro ao definir responsável");
+    }
+  }
+
+  async function handleSetSubtaskDueDate(subtaskId: string, value: string) {
+    const prev = subtasks;
+    setSubtasks((p) => p.map((s) => (s.id === subtaskId ? { ...s, dueDate: value ? new Date(`${value}T00:00:00`) : null } : s)));
+    try {
+      const res = await fetch("/api/kanban/cards/subtasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: subtaskId, dueDate: value || null }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setSubtasks(prev);
+      toast.error("Erro ao definir prazo");
+    }
+  }
+
+  async function handleToggleVisibility() {
+    const next = visibility === "private" ? "public" : "private";
+    setSavingVisibility(true);
+    try {
+      const res = await fetch("/api/kanban/cards", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: card.id, visibility: next }),
+      });
+      if (!res.ok) throw new Error();
+      setVisibility(next);
+      onUpdate({ ...card, visibility: next, attachments, comments, subtasks, linkedBoards });
+      toast.success(next === "public" ? "Tarefa pública" : "Tarefa privada");
+    } catch {
+      toast.error("Erro ao alterar visibilidade");
+    } finally {
+      setSavingVisibility(false);
+    }
+  }
+
+  async function handleAddProject(boardId: string) {
+    setShowProjectDropdown(false);
+    setProjectSearch("");
+    try {
+      const res = await fetch("/api/kanban/cards/boards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId: card.id, boardId }),
+      });
+      if (!res.ok) throw new Error();
+      const { data: board } = await res.json();
+      setLinkedBoards((prev) => [...prev, { cardId: card.id, boardId, createdAt: new Date(), board }]);
+    } catch {
+      toast.error("Erro ao vincular projeto");
+    }
+  }
+
+  async function handleRemoveProject(boardId: string) {
+    const prev = linkedBoards;
+    setLinkedBoards((p) => p.filter((lb) => lb.boardId !== boardId));
+    try {
+      const res = await fetch(`/api/kanban/cards/boards?cardId=${card.id}&boardId=${boardId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+    } catch {
+      setLinkedBoards(prev);
+      toast.error("Erro ao remover projeto");
+    }
+  }
+
+  const projectResults = allBoards.filter(
+    (b) =>
+      b.id !== card.boardId &&
+      !linkedBoards.some((lb) => lb.boardId === b.id) &&
+      b.name.toLowerCase().includes(projectSearch.toLowerCase())
+  );
+  const homeBoard = allBoards.find((b) => b.id === card.boardId);
+
   return (
     <>
       {/* Overlay */}
@@ -309,6 +417,21 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
           </button>
         </div>
 
+        {/* Visibility banner */}
+        <div className="flex items-center justify-between px-5 py-2 bg-background border-b border-border text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            {visibility === "private" ? <Lock className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5" />}
+            {visibility === "private" ? "Esta tarefa é privada — só você e o responsável veem." : "Esta tarefa é pública para quem acessa o board."}
+          </span>
+          <button
+            onClick={handleToggleVisibility}
+            disabled={savingVisibility}
+            className="text-primary font-medium hover:underline shrink-0 disabled:opacity-50"
+          >
+            {visibility === "private" ? "Tornar pública" : "Tornar privada"}
+          </button>
+        </div>
+
         {/* Tabs */}
         <div className="flex border-b border-border px-5">
           {(["details", "attachments", "comments", "completion"] as const).map((t) => (
@@ -359,6 +482,30 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
                 </div>
               </div>
 
+              {/* Difficulty */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Dificuldade
+                </label>
+                <div className="flex gap-2">
+                  {difficulties.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setDifficulty(d)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                        difficulty === d
+                          ? `${difficultyConfig[d].bg} ${difficultyConfig[d].color} ${difficultyConfig[d].border}`
+                          : "border-border text-muted-foreground hover:border-primary/30"
+                      )}
+                    >
+                      <span className={cn("w-1.5 h-1.5 rounded-full", difficultyConfig[d].dot)} />
+                      {difficultyConfig[d].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Responsável */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
@@ -393,6 +540,61 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
                 </div>
               </div>
 
+              {/* Projetos */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Projetos
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {homeBoard && (
+                    <span
+                      title="Board principal deste card"
+                      className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-border bg-background"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: homeBoard.color ?? "#64748b" }} />
+                      {homeBoard.name}
+                    </span>
+                  )}
+                  {linkedBoards.map((lb) => (
+                    <span
+                      key={lb.boardId}
+                      className="flex items-center gap-1.5 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full border border-border bg-background"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: lb.board.color ?? "#64748b" }} />
+                      {lb.board.name}
+                      <button onClick={() => handleRemoveProject(lb.boardId)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    value={projectSearch}
+                    onChange={(e) => setProjectSearch(e.target.value)}
+                    onFocus={() => setShowProjectDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowProjectDropdown(false), 150)}
+                    placeholder="Nome do projeto…"
+                    className="w-full h-9 bg-background border border-border rounded-lg pl-8 pr-2 text-sm focus:outline-none focus:border-primary transition-colors"
+                  />
+                  {showProjectDropdown && projectResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-10 bg-card border border-border rounded-xl shadow-xl py-1 max-h-40 overflow-y-auto">
+                      {projectResults.map((b) => (
+                        <button
+                          key={b.id}
+                          onMouseDown={() => handleAddProject(b.id)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-primary/10 transition-colors text-left"
+                        >
+                          <Kanban className="w-3.5 h-3.5 shrink-0" style={{ color: b.color ?? undefined }} />
+                          <span className="truncate">{b.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Subtasks */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -407,28 +609,65 @@ export function CardModal({ card, workspaceId, onClose, onUpdate, onDelete }: Pr
                 </div>
                 <div className="space-y-1">
                   {subtasks.map((s) => (
-                    <div key={s.id} className="group flex items-center gap-2 py-1">
-                      <button onClick={() => handleToggleSubtask(s.id, !s.isDone)} className="shrink-0">
-                        {s.isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+                    <div key={s.id} className="group py-1">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleToggleSubtask(s.id, !s.isDone)} className="shrink-0">
+                          {s.isDone ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Circle className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setExpandedSubtaskId(expandedSubtaskId === s.id ? null : s.id)}
+                          className={cn("flex-1 text-left text-sm", s.isDone && "line-through text-muted-foreground")}
+                        >
+                          {s.title}
+                        </button>
+                        {s.dueDate && (
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">{formatDate(s.dueDate)}</span>
                         )}
-                      </button>
-                      <span
-                        className={cn(
-                          "flex-1 text-sm",
-                          s.isDone && "line-through text-muted-foreground"
-                        )}
-                      >
-                        {s.title}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteSubtask(s.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        <span
+                          title={s.assignedTo?.name ?? "Sem responsável"}
+                          className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden shrink-0"
+                        >
+                          {s.assignedTo?.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={s.assignedTo.image} alt="" className="w-full h-full object-cover" />
+                          ) : s.assignedTo?.name ? (
+                            initials(s.assignedTo.name)
+                          ) : (
+                            <UserCircle2 className="w-3 h-3 text-muted-foreground" />
+                          )}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteSubtask(s.id)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {expandedSubtaskId === s.id && (
+                        <div className="flex items-center gap-2 mt-1.5 pl-6">
+                          <div className="flex-1">
+                            <AssigneeSelect
+                              members={members}
+                              value={s.assignedToId ?? ""}
+                              onChange={(id) => handleSetSubtaskAssignee(s.id, id)}
+                            />
+                          </div>
+                          <div className="relative shrink-0">
+                            <CalendarDays className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            <input
+                              type="date"
+                              value={toDateInputValue(s.dueDate)}
+                              onChange={(e) => handleSetSubtaskDueDate(s.id, e.target.value)}
+                              className="h-9 w-36 bg-background border border-border rounded-lg pl-7 pr-2 text-xs focus:outline-none focus:border-primary transition-colors"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

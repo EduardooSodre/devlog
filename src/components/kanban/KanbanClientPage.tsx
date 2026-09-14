@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
 import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff } from "lucide-react";
-import { cn, priorityConfig, formatDate, initials } from "@/lib/utils";
+import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
 import { DueDateAlerts } from "./DueDateAlerts";
@@ -16,6 +16,7 @@ import { CalendarView } from "./CalendarView";
 import { FilesView } from "./FilesView";
 import { TimelineView } from "./TimelineView";
 import { MessagesView } from "./MessagesView";
+import { FilterPanel, EMPTY_FILTERS, applyCardFilters, type CardFilters } from "./FilterPanel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const VIEWS = [
@@ -66,6 +67,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [view, setView] = useState<ViewId>("board");
   const [filterMine, setFilterMine] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(true);
+  const [cardFilters, setCardFilters] = useState<CardFilters>(EMPTY_FILTERS);
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
 
@@ -84,10 +86,38 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
     () =>
       filteredColumns.map((col) => ({
         ...col,
-        cards: (col.cards ?? []).filter((c) => !hideCompleted || c.status !== "done"),
+        cards: (col.cards ?? [])
+          .filter((c) => !hideCompleted || c.status !== "done")
+          .filter((c) => applyCardFilters(c, cardFilters)),
       })),
-    [filteredColumns, hideCompleted]
+    [filteredColumns, hideCompleted, cardFilters]
   );
+
+  // Painel mantém "Concluído" sempre visível de propósito (ver comentário acima), mas
+  // "Minhas tarefas" e os filtros avançados também se aplicam aqui — sem isso o botão
+  // Filtrar fica sem efeito nenhum na view onde ele mais aparece.
+  const boardColumns = useMemo(
+    () =>
+      filteredColumns.map((col) => ({
+        ...col,
+        cards: (col.cards ?? []).filter((c) => applyCardFilters(c, cardFilters)),
+      })),
+    [filteredColumns, cardFilters]
+  );
+
+  // Pra popular os pickers de Responsável/Criador do FilterPanel com quem já aparece
+  // em algum card do board ativo — evita listar o workspace inteiro sem necessidade.
+  const filterPeople = useMemo(() => {
+    if (!activeBoard) return [];
+    const map = new Map<string, { id: string; name: string | null; image: string | null }>();
+    for (const col of activeBoard.columns) {
+      for (const c of col.cards ?? []) {
+        if (c.assignedTo) map.set(c.assignedTo.id, c.assignedTo);
+        if (c.createdBy) map.set(c.createdBy.id, c.createdBy);
+      }
+    }
+    return [...map.values()];
+  }, [activeBoard]);
 
   // ── Create board ──
   async function handleCreateBoard() {
@@ -186,8 +216,17 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       const newColumns = activeBoard.columns.map((col) => ({ ...col, cards: [...(col.cards ?? [])] }));
       const srcCol = newColumns.find((c) => c.id === source.droppableId)!;
       const dstCol = newColumns.find((c) => c.id === destination.droppableId)!;
-      const [movedCard] = srcCol.cards.splice(source.index, 1);
-      dstCol.cards.splice(destination.index, 0, movedCard);
+
+      // Com "Minhas tarefas"/Filtrar ativos, o Painel arrasta sobre a lista FILTRADA —
+      // source.index/destination.index são posições nela, não na coluna real. Acha a
+      // posição real pelo id do card (o próprio ou o vizinho de destino) em vez de usar
+      // o índice cru contra o array cheio, senão o card pula pra posição errada.
+      const dstFiltered = boardColumns.find((c) => c.id === destination.droppableId)?.cards ?? [];
+      const realSrcIndex = srcCol.cards.findIndex((c) => c.id === draggableId);
+      const [movedCard] = srcCol.cards.splice(realSrcIndex, 1);
+      const neighbor = destination.index < dstFiltered.length ? dstFiltered[destination.index] : null;
+      const realDstIndex = neighbor ? dstCol.cards.findIndex((c) => c.id === neighbor.id) : dstCol.cards.length;
+      dstCol.cards.splice(realDstIndex === -1 ? dstCol.cards.length : realDstIndex, 0, movedCard);
 
       setBoards((prev) =>
         prev.map((b) => (b.id === activeBoard.id ? { ...b, columns: newColumns } : b))
@@ -202,14 +241,14 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
           body: JSON.stringify({
             id: draggableId,
             columnId: destination.droppableId,
-            order: destination.index,
+            order: realDstIndex === -1 ? dstCol.cards.length - 1 : realDstIndex,
           }),
         });
       } catch {
         toast.error("Erro ao mover card");
       }
     },
-    [activeBoard]
+    [activeBoard, boardColumns]
   );
 
   // ── Update card from modal ──
@@ -356,7 +395,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const cardsWithDue = boards.flatMap((b) =>
     b.columns.flatMap((col) =>
       col.cards
-        .filter((c) => c.dueDate)
+        .filter((c) => c.dueDate && c.status !== "done" && c.status !== "cancelled")
         .map((c) => ({
           id: c.id,
           title: c.title,
@@ -376,9 +415,15 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         <div className="relative min-w-0">
           <button
             onClick={() => setShowBoardSwitcher((v) => !v)}
-            className="flex items-center gap-1.5 -ml-2 px-2 py-1 rounded-lg text-xl font-semibold hover:bg-card transition-colors max-w-full"
+            className="flex items-center gap-1.5 -ml-2 px-2 py-1 rounded-lg text-xl font-semibold hover:bg-card transition-colors max-w-full min-w-0"
           >
-            <span className="truncate">{activeBoard?.name ?? "Nenhum board"}</span>
+            {activeBoard && (
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: activeBoard.color ?? "#64748b" }}
+              />
+            )}
+            <span className="truncate min-w-0" title={activeBoard?.name}>{activeBoard?.name ?? "Nenhum board"}</span>
             <ChevronDown className={cn("w-4 h-4 text-muted-foreground shrink-0 transition-transform", showBoardSwitcher && "rotate-180")} />
           </button>
 
@@ -402,7 +447,10 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                             : "text-foreground hover:bg-primary/5"
                         )}
                       >
-                        <Kanban className="w-3.5 h-3.5 shrink-0" />
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ background: board.color ?? "#64748b" }}
+                        />
                         <span className="truncate">{board.name}</span>
                       </button>
                     ))}
@@ -570,8 +618,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
             </TabsList>
           </Tabs>
 
-          {view !== "board" && (
-            <div className="flex items-center gap-2 py-2">
+          <div className="flex items-center gap-2 py-2">
               <button
                 onClick={() => setFilterMine((v) => !v)}
                 className={cn(
@@ -598,8 +645,8 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                   Ocultar concluídas
                 </button>
               )}
+              <FilterPanel filters={cardFilters} onChange={setCardFilters} people={filterPeople} />
             </div>
-          )}
         </div>
       )}
 
@@ -636,7 +683,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         <DragDropContext onDragEnd={onDragEnd}>
           <BoardCanvas>
           <div className="flex gap-6 p-6 h-full items-stretch w-max">
-            {activeBoard.columns.map((column) => (
+            {boardColumns.map((column) => (
               <KanbanColumn
                 key={column.id}
                 column={column}
@@ -705,6 +752,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         <CardModal
           card={selectedCard}
           workspaceId={workspaceId}
+          allBoards={boards.map((b) => ({ id: b.id, name: b.name, color: b.color }))}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
           onDelete={handleCardDelete}
@@ -850,6 +898,21 @@ function KanbanColumn({
                           )}
                         >
                           {priorityConfig[card.priority].label}
+                        </span>
+                        <span className="text-muted-foreground/40">·</span>
+                        <span
+                          className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            difficultyConfig[card.difficulty].dot
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "text-xs font-medium",
+                            difficultyConfig[card.difficulty].color
+                          )}
+                        >
+                          {difficultyConfig[card.difficulty].label}
                         </span>
                       </div>
                       {card.status === "done" && (

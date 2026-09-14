@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { cn, priorityConfig, formatDate, initials } from "@/lib/utils";
+import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 
 interface Props {
@@ -51,6 +51,7 @@ export function ListView({ columns, onCardClick }: Props) {
             <TableHead className="cursor-pointer" onClick={() => setSortKey("priority")}>
               Prioridade
             </TableHead>
+            <TableHead>Dificuldade</TableHead>
             <TableHead>Responsável</TableHead>
             <TableHead className="cursor-pointer" onClick={() => setSortKey("dueDate")}>
               Prazo
@@ -72,6 +73,12 @@ export function ListView({ columns, onCardClick }: Props) {
                 <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", priorityConfig[card.priority].color)}>
                   <span className={cn("w-1.5 h-1.5 rounded-full", priorityConfig[card.priority].dot)} />
                   {priorityConfig[card.priority].label}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", difficultyConfig[card.difficulty].color)}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", difficultyConfig[card.difficulty].dot)} />
+                  {difficultyConfig[card.difficulty].label}
                 </span>
               </TableCell>
               <TableCell>

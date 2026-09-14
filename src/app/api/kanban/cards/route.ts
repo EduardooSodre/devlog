@@ -44,12 +44,14 @@ const createCardSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  difficulty: z.enum(["easy", "medium", "hard", "very_hard"]).default("medium"),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   columnId: z.string(),
   boardId: z.string(),
   order: z.number().default(0),
   assignedToId: z.string().optional().nullable(),
+  visibility: z.enum(["private", "public"]).optional(),
 });
 
 const updateCardSchema = z.object({
@@ -57,6 +59,7 @@ const updateCardSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  difficulty: z.enum(["easy", "medium", "hard", "very_hard"]).optional(),
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).optional(),
   columnId: z.string().optional(), // mover entre colunas
   order: z.number().optional(),
@@ -65,6 +68,7 @@ const updateCardSchema = z.object({
   completionNotes: z.string().optional(),
   completedAt: z.string().optional().nullable(),
   assignedToId: z.string().optional().nullable(),
+  visibility: z.enum(["private", "public"]).optional(),
 });
 
 /** Acha a coluna "Concluído" do board (por nome, com fallback pra última coluna) —
@@ -104,7 +108,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const { title, description, priority, startDate, dueDate, columnId, boardId, order, assignedToId } = parsed.data;
+    const { title, description, priority, difficulty, startDate, dueDate, columnId, boardId, order, assignedToId, visibility } = parsed.data;
 
     if (!(await assertBoardAccess(session.user.id, boardId))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
@@ -118,12 +122,14 @@ export async function POST(req: NextRequest) {
         title,
         description,
         priority,
+        difficulty,
         startDate: parseDateOnly(startDate || todayInBrasilia()),
         dueDate: dueDate ? parseDateOnly(dueDate) : undefined,
         columnId,
         boardId,
         order,
         assignedToId: assignedToId ?? undefined,
+        visibility: visibility ?? undefined,
         createdById: session.user.id,
       })
       .returning();
@@ -177,11 +183,13 @@ export async function PATCH(req: NextRequest) {
     if (updates.title) updateData.title = updates.title;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.priority) updateData.priority = updates.priority;
+    if (updates.difficulty) updateData.difficulty = updates.difficulty;
     if (updates.status) updateData.status = updates.status;
     if (updates.columnId) updateData.columnId = updates.columnId;
     if (updates.order !== undefined) updateData.order = updates.order;
     if (updates.completionNotes) updateData.completionNotes = updates.completionNotes;
     if (updates.assignedToId !== undefined) updateData.assignedToId = updates.assignedToId;
+    if (updates.visibility) updateData.visibility = updates.visibility;
     if (updates.startDate !== undefined) updateData.startDate = updates.startDate ? parseDateOnly(updates.startDate) : null;
     if (updates.dueDate !== undefined) updateData.dueDate = updates.dueDate ? parseDateOnly(updates.dueDate) : null;
 
