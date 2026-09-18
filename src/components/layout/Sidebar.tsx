@@ -20,6 +20,7 @@ import { WorkspaceSwitcher, type WorkspaceOption } from "@/components/layout/Wor
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { ProfileModal } from "@/components/layout/ProfileModal";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -76,11 +77,14 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProp
       )}
     >
       {/* ── Logo ── */}
-      <div className={cn("flex items-center gap-2.5 px-5 py-5", collapsed && "justify-center px-0")}>
-        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <BookOpen className="w-3.5 h-3.5 text-white" />
+      <div className={cn("flex items-center gap-2.5 px-5 py-5", collapsed && "flex-col gap-2 px-0")}>
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
+          {!collapsed && <span className="font-semibold text-sm tracking-tight truncate">DevLog</span>}
         </div>
-        {!collapsed && <span className="font-semibold text-sm tracking-tight truncate">DevLog</span>}
+        <NotificationBell collapsed={collapsed} />
       </div>
 
       <WorkspaceSwitcher workspaces={workspaces} activeId={activeWorkspaceId} collapsed={collapsed} />

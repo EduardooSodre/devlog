@@ -15,6 +15,9 @@ import {
 import { eq, and, count, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { getPlanConfig, isWithinLimit, type PlanId } from "@/lib/plans";
 import { isTrialExpired } from "@/lib/org-domain";
+import { isCardVisibleTo } from "@/lib/card-visibility";
+
+export { isCardVisibleTo };
 
 export const WORKSPACE_COOKIE = "devlog-workspace";
 
@@ -69,17 +72,21 @@ export async function verifyWorkspaceAccess(userId: string, workspaceId: string)
 
 /**
  * O check de acesso de verdade para um board específico (e por extensão, seus cards,
- * comentários e anexos): não basta ser membro do workspace — se o board está restrito
- * a um departamento, só quem está nesse departamento (ou é owner/admin) pode ler ou
- * escrever nele. Usar isto em vez de `verifyWorkspaceAccess` sozinho em qualquer rota
- * que opera sobre um board/card já existente.
+ * comentários e anexos): não basta ser membro do workspace.
+ * - "Pessoal": só quem criou vê — nem owner/admin do workspace tem bypass aqui, é
+ *   rascunho individual de propósito (mesma lógica do card `visibility: private`).
+ * - Restrito a departamento: só quem está nesse departamento (ou é owner/admin).
+ * - Nem pessoal nem com departamento: visível pro workspace inteiro.
+ * Usar isto em vez de `verifyWorkspaceAccess` sozinho em qualquer rota que opera sobre
+ * um board/card já existente.
  */
 export async function canAccessBoard(
   userId: string,
-  board: { workspaceId: string; departmentId: string | null }
+  board: { workspaceId: string; departmentId: string | null; isPersonal: boolean; createdById: string }
 ): Promise<boolean> {
   const member = await verifyWorkspaceAccess(userId, board.workspaceId);
   if (!member) return false;
+  if (board.isPersonal) return board.createdById === userId;
   if (!board.departmentId) return true;
   if (member.role === "owner" || member.role === "admin") return true;
 
@@ -93,16 +100,44 @@ export async function canAccessBoard(
 }
 
 /**
- * Filtro SQL para "quais boards este usuário enxerga": dono/admin do workspace vê
- * tudo; membro comum só vê boards sem departamento (visíveis pro workspace inteiro)
- * ou de departamentos dos quais participa. `undefined` = sem filtro (vê tudo).
+ * Checagem de acesso de verdade pra QUALQUER rota que opera sobre um card específico
+ * (comentário, anexo, subtarefa, atividade, vínculo entre projetos, transferência...):
+ * não basta acesso ao board — um card `visibility: "private"` restringe além disso a
+ * quem criou ou é o responsável, mesmo pra quem enxerga o board. Antes desta função,
+ * cada rota reimplementava só a checagem de board e nenhuma verificava isso — usar
+ * sempre esta função em vez de reescrever a checagem local em cada rota nova.
+ * Retorna `{ card, board }` se tiver acesso, `null` caso contrário.
+ */
+export async function assertCardAccess(userId: string, cardId: string) {
+  const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
+  if (!card) return null;
+
+  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
+  if (!board || !(await canAccessBoard(userId, board))) return null;
+
+  if (!isCardVisibleTo(userId, card)) return null;
+
+  return { card, board };
+}
+
+export type CardAccess = NonNullable<Awaited<ReturnType<typeof assertCardAccess>>>;
+
+/**
+ * Filtro SQL para "quais boards este usuário enxerga": sempre vê os próprios boards
+ * (inclusive pessoais); dos demais (não-pessoais), dono/admin do workspace vê todos,
+ * membro comum só vê os sem departamento (workspace inteiro) ou de departamentos dos
+ * quais participa.
  */
 export async function getBoardVisibilityFilter(
   userId: string,
   workspaceId: string,
   role: string
 ): Promise<SQL | undefined> {
-  if (role === "owner" || role === "admin") return undefined;
+  const own = eq(kanbanBoards.createdById, userId);
+
+  if (role === "owner" || role === "admin") {
+    return or(own, eq(kanbanBoards.isPersonal, false));
+  }
 
   const rows = await db
     .select({ id: departments.id })
@@ -111,9 +146,11 @@ export async function getBoardVisibilityFilter(
     .where(and(eq(departments.workspaceId, workspaceId), eq(departmentMembers.userId, userId)));
   const myDeptIds = rows.map((r) => r.id);
 
-  return myDeptIds.length > 0
+  const sharedVisible = myDeptIds.length > 0
     ? or(isNull(kanbanBoards.departmentId), inArray(kanbanBoards.departmentId, myDeptIds))
     : isNull(kanbanBoards.departmentId);
+
+  return or(own, and(eq(kanbanBoards.isPersonal, false), sharedVisible));
 }
 
 export async function getWorkspaceUsage(workspaceId: string) {

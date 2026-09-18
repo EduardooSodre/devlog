@@ -19,6 +19,9 @@ const createBoardSchema = z.object({
   color: z.string().default("#4f6ef7"),
   workspaceId: z.string(),
   departmentId: z.string().optional().nullable(),
+  // Omitido = pessoal (padrão pra board novo, ver comentário na coluna do schema).
+  // Passar departmentId ou isPersonal:false explicitamente é como a pessoa "compartilha".
+  isPersonal: z.boolean().optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -100,6 +103,9 @@ export async function POST(req: NextRequest) {
     }
 
     const { name, description, color, workspaceId, departmentId } = parsed.data;
+    // Departamento escolhido ou isPersonal:false explícito = a pessoa optou por
+    // compartilhar; sem nenhum dos dois, o board nasce pessoal (só o criador vê).
+    const isPersonal = departmentId ? false : parsed.data.isPersonal ?? true;
 
     if (!(await verifyWorkspaceAccess(session.user.id, workspaceId))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
@@ -129,7 +135,8 @@ export async function POST(req: NextRequest) {
         description,
         color,
         workspaceId,
-        departmentId: departmentId ?? undefined,
+        departmentId: isPersonal ? undefined : departmentId ?? undefined,
+        isPersonal,
         createdById: session.user.id,
       })
       .returning();
@@ -156,7 +163,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { id, name, description, color, isArchived } = body;
+    const { id, name, description, color, isArchived, departmentId, isPersonal } = body;
 
     if (!id) {
       return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
@@ -170,6 +177,21 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
+    // Trocar o departamento que restringe o board (ou liberar pro workspace todo com
+    // null) — mesma checagem da criação: só pode restringir a um departamento do qual
+    // já participa, senão daria pra "esconder" um board atrás de um departamento alheio.
+    if (departmentId !== undefined && departmentId !== null) {
+      const dept = await db.query.departments.findFirst({ where: eq(departments.id, departmentId) });
+      const isMember =
+        dept &&
+        (await db.query.departmentMembers.findFirst({
+          where: and(eq(departmentMembers.departmentId, departmentId), eq(departmentMembers.userId, session.user.id)),
+        }));
+      if (!dept || dept.workspaceId !== existing.workspaceId || !isMember) {
+        return NextResponse.json({ error: "Departamento inválido" }, { status: 403 });
+      }
+    }
+
     const [updated] = await db
       .update(kanbanBoards)
       .set({
@@ -177,6 +199,9 @@ export async function PATCH(req: NextRequest) {
         ...(description !== undefined && { description }),
         ...(color && { color }),
         ...(isArchived !== undefined && { isArchived }),
+        ...(departmentId !== undefined && { departmentId, isPersonal: false }),
+        // Virar pessoal sempre limpa o departamento — os dois são mutuamente exclusivos.
+        ...(isPersonal === true && { isPersonal: true, departmentId: null }),
         updatedAt: new Date(),
       })
       .where(eq(kanbanBoards.id, id))

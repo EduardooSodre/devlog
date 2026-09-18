@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { BookOpen, Briefcase, Building2, Check, Loader2, Plus } from "lucide-react";
+import { BookOpen, Briefcase, Building2, Check, Loader2, Plus, Sparkles, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { suggestDepartmentName } from "@/lib/job-department";
 
 interface Department {
   id: string;
@@ -13,14 +14,21 @@ interface Department {
 
 interface Props {
   workspaceId: string;
+  workspaceName?: string;
+  /** Já tem outras pessoas no workspace (ex.: entrou via e-mail corporativo já existente) —
+   * mostra um passo de boas-vindas extra em vez de ir direto pro cargo. */
+  showOrgWelcome?: boolean;
 }
 
-const STEPS = ["cargo", "departamento"] as const;
-type Step = (typeof STEPS)[number];
+type Step = "boas-vindas" | "cargo" | "departamento";
 
-export function OnboardingWizard({ workspaceId }: Props) {
+export function OnboardingWizard({ workspaceId, workspaceName, showOrgWelcome }: Props) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("cargo");
+  const STEPS = useMemo<Step[]>(
+    () => (showOrgWelcome ? ["boas-vindas", "cargo", "departamento"] : ["cargo", "departamento"]),
+    [showOrgWelcome]
+  );
+  const [step, setStep] = useState<Step>(STEPS[0]);
   const [jobTitle, setJobTitle] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
@@ -30,13 +38,33 @@ export function OnboardingWizard({ workspaceId }: Props) {
 
   useEffect(() => {
     if (!workspaceId) return;
-    fetch(`/api/workspaces/departments?workspaceId=${workspaceId}`)
+    fetch(`/api/workspaces/departments?workspaceId=${workspaceId}&all=1`)
       .then((res) => res.json())
       .then((json) => setDepartments(json.data ?? []))
       .catch(() => {});
   }, [workspaceId]);
 
+  // Sugestão automática: casa o cargo digitado com um departamento pelo nome — se já
+  // existir um departamento com esse nome no workspace, pré-seleciona; senão, sugere
+  // como nome pro "criar novo departamento" (a pessoa sempre pode trocar/ignorar).
+  const suggestedName = useMemo(() => suggestDepartmentName(jobTitle), [jobTitle]);
+  const suggestedDept = useMemo(
+    () => departments.find((d) => d.name.toLowerCase() === suggestedName?.toLowerCase()),
+    [departments, suggestedName]
+  );
+
+  useEffect(() => {
+    if (!creatingDept && selectedDeptId === null && suggestedDept) {
+      setSelectedDeptId(suggestedDept.id);
+    }
+    if (suggestedName && !suggestedDept && !creatingDept && !newDeptName) {
+      setNewDeptName(suggestedName);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedDept, suggestedName]);
+
   const stepIndex = STEPS.indexOf(step);
+  const isJoiningExisting = selectedDeptId !== null && !creatingDept;
 
   async function handleFinish() {
     setSubmitting(true);
@@ -59,8 +87,9 @@ export function OnboardingWizard({ workspaceId }: Props) {
         body: JSON.stringify({ jobTitle: jobTitle.trim() || undefined, departmentId }),
       });
       if (!res.ok) throw new Error();
+      const json = await res.json();
 
-      toast.success("Tudo pronto!");
+      toast.success(json.joinRequested ? "Pedido de entrada enviado!" : "Tudo pronto!");
       router.refresh();
     } catch {
       toast.error("Erro ao concluir. Tente de novo.");
@@ -94,6 +123,21 @@ export function OnboardingWizard({ workspaceId }: Props) {
         </div>
 
         <div className="p-6 min-h-[220px]">
+          {step === "boas-vindas" && (
+            <div className="space-y-3 text-center py-4">
+              <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
+                <Users className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-base font-semibold">
+                A {workspaceName ?? "sua organização"} já está no DevLog!
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                Seus colegas já estão por aqui organizando o trabalho. Responda só mais duas
+                perguntinhas rápidas pra gente te encaixar no departamento certo.
+              </p>
+            </div>
+          )}
+
           {step === "cargo" && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -105,11 +149,19 @@ export function OnboardingWizard({ workspaceId }: Props) {
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && setStep("departamento")}
-                placeholder="Ex.: Desenvolvedor, Gerente de TI, Analista…"
+                placeholder="Ex.: Desenvolvedor, Analista de Orçamentos, Especialista em Contratos…"
                 className="w-full h-11 bg-background border border-border rounded-xl px-4 text-sm focus:outline-none focus:border-primary transition-colors"
               />
+              {suggestedName && (
+                <p className="flex items-center gap-1.5 text-xs text-primary">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Isso parece {suggestedDept ? "combinar com" : "sugerir um novo departamento:"}{" "}
+                  <strong>{suggestedName}</strong>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
-                Ajuda a organizar quem é quem no workspace. Pode deixar em branco e preencher depois.
+                Ajuda a te encaixar automaticamente no departamento certo. Pode deixar em branco e
+                preencher depois.
               </p>
             </div>
           )}
@@ -134,7 +186,10 @@ export function OnboardingWizard({ workspaceId }: Props) {
                           : "border-border hover:border-primary/30"
                       )}
                     >
-                      {d.name}
+                      <span className="flex items-center gap-1.5">
+                        {d.name}
+                        {suggestedDept?.id === d.id && <Sparkles className="w-3 h-3 text-primary" />}
+                      </span>
                       {selectedDeptId === d.id && <Check className="w-4 h-4" />}
                     </button>
                   ))}
@@ -162,16 +217,18 @@ export function OnboardingWizard({ workspaceId }: Props) {
               )}
 
               <p className="text-xs text-muted-foreground">
-                Opcional — dá pra pular e organizar isso depois em Configurações.
+                {isJoiningExisting
+                  ? "Você vai pedir entrada — quem criou o departamento precisa aprovar antes de você ver os quadros dele."
+                  : "Opcional — dá pra pular e organizar isso depois em Configurações."}
               </p>
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background/50">
-          {step === "departamento" ? (
+          {stepIndex > 0 ? (
             <button
-              onClick={() => setStep("cargo")}
+              onClick={() => setStep(STEPS[stepIndex - 1])}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Voltar
@@ -180,9 +237,9 @@ export function OnboardingWizard({ workspaceId }: Props) {
             <span />
           )}
 
-          {step === "cargo" ? (
+          {stepIndex < STEPS.length - 1 ? (
             <button
-              onClick={() => setStep("departamento")}
+              onClick={() => setStep(STEPS[stepIndex + 1])}
               className="bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 transition-colors"
             >
               Continuar
@@ -194,7 +251,7 @@ export function OnboardingWizard({ workspaceId }: Props) {
               className="flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              Concluir
+              {isJoiningExisting ? "Pedir entrada" : "Concluir"}
             </button>
           )}
         </div>

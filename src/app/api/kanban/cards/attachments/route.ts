@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cardAttachments, kanbanCards, kanbanBoards } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { cardAttachments } from "@/lib/db/schema";
 import { z } from "zod";
-import { canAccessBoard } from "@/lib/workspace";
+import { assertCardAccess } from "@/lib/workspace";
 
 const createAttachmentSchema = z.object({
   cardId: z.string(),
@@ -29,12 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
-    const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, parsed.data.cardId) });
-    if (!card) {
-      return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
-    }
-    const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
-    if (!board || !(await canAccessBoard(session.user.id, board))) {
+    if (!(await assertCardAccess(session.user.id, parsed.data.cardId))) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 

@@ -7,24 +7,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cardSubtasks, kanbanCards, kanbanBoards } from "@/lib/db/schema";
+import { cardSubtasks, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { canAccessBoard } from "@/lib/workspace";
-import { sendPushToUser } from "@/lib/push";
-
-/** Mesmo padrão de checagem de acesso usado em comments/attachments — sem isso,
- * qualquer usuário autenticado poderia ler/escrever subtarefas de cards de outros
- * workspaces, ou de boards restritos a um departamento do qual não participa. */
-async function assertCardAccess(userId: string, cardId: string) {
-  const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
-  if (!card) return null;
-
-  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
-  if (!board) return null;
-
-  return (await canAccessBoard(userId, board)) ? { card, board } : null;
-}
+import { assertCardAccess } from "@/lib/workspace";
+import { notifyUser } from "@/lib/notify";
+import { logActivity } from "@/lib/activity";
 
 /** Mesmo motivo do `parseDateOnly` em cards/route.ts — fixa Brasília em vez da hora
  * local do processo, que em produção costuma ser UTC. */
@@ -35,7 +23,7 @@ function parseDateOnly(value: string): Date {
 async function notifySubtaskAssignee(cardTitle: string, subtaskTitle: string, boardId: string, assignedToId: string, actorId: string) {
   if (assignedToId === actorId) return;
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
-  await sendPushToUser(assignedToId, {
+  await notifyUser(assignedToId, {
     title: `Subtarefa atribuída a você em "${cardTitle}"`,
     body: subtaskTitle,
     url: board ? `/projetos?board=${board.id}` : "/projetos",
@@ -105,6 +93,16 @@ export async function PATCH(req: NextRequest) {
 
   if (rest.assignedToId && rest.assignedToId !== existing.assignedToId) {
     await notifySubtaskAssignee(access.card.title, updated.title, access.card.boardId, rest.assignedToId, session.user.id);
+  }
+
+  if (rest.isDone === true && existing.isDone === false) {
+    await logActivity({
+      cardId: access.card.id,
+      boardId: access.card.boardId,
+      actorId: session.user.id,
+      type: "subtask_done",
+      message: `concluiu a subtarefa "${updated.title}"`,
+    });
   }
 
   return NextResponse.json({ success: true, data: updated });

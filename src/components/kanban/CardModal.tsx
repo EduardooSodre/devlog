@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   X, CheckCircle2, Circle, Clock, Flag, Paperclip,
   MessageSquare, Loader2, ChevronDown, Upload, Trash2, Plus,
-  Lock, Globe, Kanban, Search, CalendarDays, UserCircle2,
+  Lock, Globe, Kanban, Search, CalendarDays, UserCircle2, History,
 } from "lucide-react";
 import { cn, priorityConfig, difficultyConfig, formatDate, formatDateTime, initials } from "@/lib/utils";
 import type { CardSubtaskWithDetails, KanbanCardWithDetails } from "@/types";
@@ -26,13 +26,25 @@ interface BoardOption {
   color: string | null;
 }
 
+interface CardActivityItem {
+  id: string;
+  type: string;
+  message: string;
+  createdAt: string;
+  actor: { id: string; name: string | null; image: string | null } | null;
+}
+
 interface Props {
   card: KanbanCardWithDetails;
   workspaceId: string;
   allBoards: BoardOption[];
+  otherWorkspaces?: { id: string; name: string }[];
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
   onDelete: (cardId: string) => void;
+  /** Chamado depois de MOVER (não copiar) o card pra outro workspace — ele deixa de
+   * existir no board atual. */
+  onMovedAway?: () => void;
 }
 
 const priorities = ["low", "medium", "high", "urgent"] as const;
@@ -49,7 +61,7 @@ function toDateInputValue(date: Date | string | null | undefined): string {
   return `${year}-${month}-${day}`;
 }
 
-export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onDelete }: Props) {
+export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], onClose, onUpdate, onDelete, onMovedAway }: Props) {
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
@@ -61,7 +73,9 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
   const [completionNotes, setCompletionNotes] = useState(card.completionNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
-  const [tab, setTab] = useState<"details" | "attachments" | "comments" | "completion">("details");
+  const [tab, setTab] = useState<"details" | "attachments" | "comments" | "activity" | "completion">("details");
+  const [activity, setActivity] = useState<CardActivityItem[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
   const [attachments, setAttachments] = useState(card.attachments ?? []);
   const [comments, setComments] = useState(card.comments ?? []);
   const [newComment, setNewComment] = useState("");
@@ -76,6 +90,71 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
   const [linkedBoards, setLinkedBoards] = useState(card.linkedBoards ?? []);
   const [projectSearch, setProjectSearch] = useState("");
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [transferWorkspaceId, setTransferWorkspaceId] = useState("");
+  const [transferBoards, setTransferBoards] = useState<BoardOption[]>([]);
+  const [transferBoardId, setTransferBoardId] = useState("");
+  const [transferColumns, setTransferColumns] = useState<{ id: string; name: string }[]>([]);
+  const [transferColumnId, setTransferColumnId] = useState("");
+  const [transferring, setTransferring] = useState<"move" | "copy" | null>(null);
+
+  useEffect(() => {
+    if (!transferWorkspaceId) {
+      setTransferBoards([]);
+      setTransferBoardId("");
+      return;
+    }
+    fetch(`/api/kanban/boards?workspaceId=${transferWorkspaceId}`)
+      .then((res) => res.json())
+      .then((json) => setTransferBoards((json.data ?? []).map((b: BoardOption) => ({ id: b.id, name: b.name, color: b.color }))))
+      .catch(() => setTransferBoards([]));
+  }, [transferWorkspaceId]);
+
+  useEffect(() => {
+    if (!transferBoardId) {
+      setTransferColumns([]);
+      setTransferColumnId("");
+      return;
+    }
+    fetch(`/api/kanban/boards?workspaceId=${transferWorkspaceId}`)
+      .then((res) => res.json())
+      .then((json) => {
+        const board = (json.data ?? []).find((b: { id: string }) => b.id === transferBoardId);
+        setTransferColumns(board?.columns ?? []);
+      })
+      .catch(() => setTransferColumns([]));
+  }, [transferBoardId, transferWorkspaceId]);
+
+  async function handleTransfer(mode: "move" | "copy") {
+    if (!transferBoardId || !transferColumnId) return;
+    setTransferring(mode);
+    try {
+      const res = await fetch("/api/kanban/cards/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cardId: card.id,
+          targetWorkspaceId: transferWorkspaceId,
+          targetBoardId: transferBoardId,
+          targetColumnId: transferColumnId,
+          mode,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Erro ao transferir");
+
+      if (mode === "move") {
+        toast.success("Tarefa movida para o outro workspace!");
+        onMovedAway?.();
+      } else {
+        toast.success("Tarefa copiada para o outro workspace!");
+      }
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao transferir tarefa");
+    } finally {
+      setTransferring(null);
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/workspaces/members?workspaceId=${workspaceId}`)
@@ -83,6 +162,17 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
       .then((json) => setMembers(json.data ?? []))
       .catch(() => {});
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (tab !== "activity" || activity.length > 0) return;
+    setLoadingActivity(true);
+    fetch(`/api/kanban/cards/activity?cardId=${card.id}`)
+      .then((res) => res.json())
+      .then((json) => setActivity(json.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingActivity(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, card.id]);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -434,7 +524,7 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
 
         {/* Tabs */}
         <div className="flex border-b border-border px-5">
-          {(["details", "attachments", "comments", "completion"] as const).map((t) => (
+          {(["details", "attachments", "comments", "activity", "completion"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -448,6 +538,7 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
               {t === "details" && "Detalhes"}
               {t === "attachments" && "Anexos"}
               {t === "comments" && `Comentários${comments.length ? ` (${comments.length})` : ""}`}
+              {t === "activity" && "Atividade"}
               {t === "completion" && "Conclusão"}
             </button>
           ))}
@@ -594,6 +685,79 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
                   )}
                 </div>
               </div>
+
+              {/* Mover/copiar para outro workspace */}
+              {otherWorkspaces.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                    Enviar para outro workspace
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      value={transferWorkspaceId}
+                      onChange={(e) => {
+                        setTransferWorkspaceId(e.target.value);
+                        setTransferBoardId("");
+                        setTransferColumnId("");
+                      }}
+                      className="w-full h-9 px-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary transition-colors"
+                    >
+                      <option value="">Escolher workspace…</option>
+                      {otherWorkspaces.map((w) => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+
+                    {transferWorkspaceId && (
+                      <select
+                        value={transferBoardId}
+                        onChange={(e) => {
+                          setTransferBoardId(e.target.value);
+                          setTransferColumnId("");
+                        }}
+                        className="w-full h-9 px-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary transition-colors"
+                      >
+                        <option value="">Escolher board…</option>
+                        {transferBoards.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {transferBoardId && (
+                      <select
+                        value={transferColumnId}
+                        onChange={(e) => setTransferColumnId(e.target.value)}
+                        className="w-full h-9 px-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary transition-colors"
+                      >
+                        <option value="">Escolher coluna…</option>
+                        {transferColumns.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {transferColumnId && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleTransfer("copy")}
+                          disabled={transferring !== null}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-background border border-border text-xs font-semibold py-2 rounded-lg hover:border-primary/40 disabled:opacity-50 transition-colors"
+                        >
+                          {transferring === "copy" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Copiar"}
+                        </button>
+                        <button
+                          onClick={() => handleTransfer("move")}
+                          disabled={transferring !== null}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white text-xs font-semibold py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                        >
+                          {transferring === "move" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Mover"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Subtasks */}
               <div>
@@ -831,6 +995,36 @@ export function CardModal({ card, workspaceId, allBoards, onClose, onUpdate, onD
                   {postingComment ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* ── Activity tab ── */}
+          {tab === "activity" && (
+            <div className="space-y-4">
+              {loadingActivity ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : activity.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Sem atividade registrada ainda.</p>
+              ) : (
+                <div className="space-y-3">
+                  {activity.map((a) => (
+                    <div key={a.id} className="flex gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-[10px] font-semibold flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                        <History className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm">
+                          <span className="font-medium">{a.actor?.name ?? "Alguém"}</span>{" "}
+                          <span className="text-foreground/80">{a.message}</span>
+                        </p>
+                        <span className="text-[11px] text-muted-foreground">{formatDateTime(a.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

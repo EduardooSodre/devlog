@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { kanbanBoards } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { KanbanClientPage } from "@/components/kanban/KanbanClientPage";
-import { getActiveWorkspaceId, verifyWorkspaceAccess, getBoardVisibilityFilter } from "@/lib/workspace";
+import { getActiveWorkspaceId, getUserWorkspaces, verifyWorkspaceAccess, getBoardVisibilityFilter } from "@/lib/workspace";
 
 export const metadata = { title: "Projetos" };
 
@@ -13,6 +13,13 @@ export default async function ProjetosPage() {
   const workspaceId = await getActiveWorkspaceId(userId);
 
   const membership = workspaceId ? await verifyWorkspaceAccess(userId, workspaceId) : null;
+
+  // Pra "mover/copiar pra outro workspace" no card — só os workspaces que a pessoa já
+  // participa, nunca uma lista aberta (senão daria pra mandar tarefa pra lugar nenhum).
+  const memberships = await getUserWorkspaces(userId);
+  const otherWorkspaces = memberships
+    .filter((m) => m.workspaceId !== workspaceId)
+    .map((m) => ({ id: m.workspace.id, name: m.workspace.name }));
 
   // Sem workspaceId ou sem associação verificada = não mostra nenhum board — nunca cair
   // pra "sem filtro" (que mostraria tudo, inclusive boards restritos a departamento).
@@ -64,6 +71,7 @@ export default async function ProjetosPage() {
     <KanbanClientPage
       initialBoards={boards as Parameters<typeof KanbanClientPage>[0]["initialBoards"]}
       workspaceId={workspaceId ?? ""}
+      otherWorkspaces={otherWorkspaces}
     />
   );
 }

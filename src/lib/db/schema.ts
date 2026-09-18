@@ -54,6 +54,16 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "trialing",
   "incomplete",
 ]);
+export const joinRequestStatusEnum = pgEnum("join_request_status", ["pending", "approved", "rejected"]);
+export const activityTypeEnum = pgEnum("activity_type", [
+  "card_created",
+  "status_changed",
+  "assigned",
+  "comment_added",
+  "comment_mention",
+  "subtask_done",
+  "transferred",
+]);
 
 // ─────────────────────────────────────────────
 // AUTH (NextAuth v5 + Drizzle Adapter)
@@ -256,6 +266,32 @@ export const departmentMembers = pgTable(
   })
 );
 
+// Entrar num departamento nunca é automático: quem não é o criador só entra depois
+// que o criador do departamento aprova o pedido — é o "quem pode ver o quê" ficando
+// nas mãos de quem já está lá dentro, nunca de quem está tentando entrar.
+export const departmentJoinRequests = pgTable(
+  "department_join_requests",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    departmentId: text("department_id")
+      .notNull()
+      .references(() => departments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: joinRequestStatusEnum("status").notNull().default("pending"),
+    decidedById: text("decided_by_id").references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { mode: "date" }),
+  },
+  (table) => ({
+    departmentIdx: index("djr_department_idx").on(table.departmentId),
+    userIdx: index("djr_user_idx").on(table.userId),
+  })
+);
+
 // ─────────────────────────────────────────────
 // KANBAN
 // ─────────────────────────────────────────────
@@ -270,6 +306,13 @@ export const kanbanBoards = pgTable("kanban_boards", {
   // Board sem departamento = visível para o workspace inteiro (comportamento de sempre).
   // Com departamento = só quem está em departmentMembers enxerga.
   departmentId: text("department_id").references(() => departments.id, { onDelete: "set null" }),
+  // "Pessoal": só quem criou enxerga, nem owner/admin do workspace — é o padrão pra
+  // board novo (rascunho individual até a pessoa decidir compartilhar com o time).
+  // Default da COLUNA é false (não true) de propósito: isso preserva o comportamento
+  // de todo board já existente antes dessa coluna existir (visível pro workspace/depto
+  // como sempre foi) — o default "pessoal pra board novo" é aplicado na rota de criação,
+  // não aqui, senão board antigo sumiria retroativamente de quem já enxergava.
+  isPersonal: boolean("is_personal").notNull().default(false),
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").default("#4f6ef7"), // cor do board
@@ -492,6 +535,60 @@ export const entryTags = pgTable(
   })
 );
 
+// Central de notificações in-app — toda vez que alguém recebe um push (atribuição,
+// menção, pedido de entrada, lembrete de prazo), uma linha entra aqui também, pra
+// existir um histórico dentro do app mesmo se a pessoa não estava online pro push.
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    url: text("url"),
+    read: boolean("read").notNull().default(false),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("notifications_user_idx").on(table.userId),
+  })
+);
+
+// Histórico de atividade por card — "quem fez o quê" (criação, mudança de status,
+// atribuição, comentário) pra quem olha o card depois não precisar adivinhar.
+export const cardActivity = pgTable(
+  "card_activity",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    cardId: text("card_id")
+      .notNull()
+      .references(() => kanbanCards.id, { onDelete: "cascade" }),
+    boardId: text("board_id")
+      .notNull()
+      .references(() => kanbanBoards.id, { onDelete: "cascade" }),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => users.id),
+    type: activityTypeEnum("type").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    cardIdx: index("card_activity_card_idx").on(table.cardId),
+  })
+);
+
+export const cardActivityRelations = relations(cardActivity, ({ one }) => ({
+  card: one(kanbanCards, { fields: [cardActivity.cardId], references: [kanbanCards.id] }),
+  actor: one(users, { fields: [cardActivity.actorId], references: [users.id] }),
+}));
+
 export const pushSubscriptions = pgTable(
   "push_subscriptions",
   {
@@ -567,6 +664,12 @@ export const departmentsRelations = relations(departments, ({ one, many }) => ({
 export const departmentMembersRelations = relations(departmentMembers, ({ one }) => ({
   department: one(departments, { fields: [departmentMembers.departmentId], references: [departments.id] }),
   user: one(users, { fields: [departmentMembers.userId], references: [users.id] }),
+}));
+
+export const departmentJoinRequestsRelations = relations(departmentJoinRequests, ({ one }) => ({
+  department: one(departments, { fields: [departmentJoinRequests.departmentId], references: [departments.id] }),
+  user: one(users, { fields: [departmentJoinRequests.userId], references: [users.id] }),
+  decidedBy: one(users, { fields: [departmentJoinRequests.decidedById], references: [users.id] }),
 }));
 
 export const workspaceInvitesRelations = relations(workspaceInvites, ({ one }) => ({

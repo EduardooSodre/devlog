@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { resolveSignupWorkspace } from "@/lib/org-domain";
+import { sendVerificationEmail } from "@/lib/email-verification";
 
 const registerSchema = z.object({
   name: z.string().min(1, "Nome obrigatório").max(100),
@@ -53,6 +54,10 @@ export async function POST(req: NextRequest) {
     // Cadastro por e-mail/senha não prova dono do e-mail (sem verificação) — nunca
     // agrupa por domínio aqui, sempre workspace pessoal. Ver nota em resolveSignupWorkspace.
     await resolveSignupWorkspace(user.id, name, email, false);
+
+    // Best-effort: se o e-mail não estiver configurado, o cadastro segue normalmente
+    // (a pessoa só não ganha o agrupamento automático por domínio até confirmar depois).
+    await sendVerificationEmail(email, name).catch((err) => console.error("[register] verificação", err));
 
     return NextResponse.json(
       { success: true, data: { id: user.id, name: user.name, email: user.email } },

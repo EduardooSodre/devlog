@@ -1,6 +1,14 @@
 /**
  * GET /api/workspaces/departments?workspaceId=xxx — Lista departamentos que o usuário
  *   enxerga (criados por ele, ou que ele foi adicionado) + membros de cada um.
+ * GET /api/workspaces/departments?workspaceId=xxx&all=1 — Lista TODOS os departamentos
+ *   do workspace, só id+nome (sem membros) — usado no onboarding pra sugerir/pedir
+ *   entrada num departamento que a pessoa ainda não faz parte. O nome do departamento
+ *   não é informação sensível; quem está dentro dele, sim (por isso "all" nunca inclui membros).
+ * GET /api/workspaces/departments?id=xxx — Um departamento específico COM membros —
+ *   usado no painel "quem tem acesso" de um board restrito a ele. Mesma regra de quem
+ *   pode ver membros de um board restrito (canAccessBoard): owner/admin do workspace,
+ *   ou quem já é membro do próprio departamento.
  * POST /api/workspaces/departments — Cria um departamento e define quem enxerga.
  *   Qualquer membro do workspace pode criar um; ele já entra como membro automaticamente.
  * DELETE /api/workspaces/departments?id=xxx — Remove (só quem criou).
@@ -26,6 +34,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  const singleId = req.nextUrl.searchParams.get("id");
+  if (singleId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, singleId),
+      with: { members: { with: { user: { columns: { id: true, name: true, image: true } } } } },
+    });
+    if (!dept) {
+      return NextResponse.json({ error: "Departamento não encontrado" }, { status: 404 });
+    }
+    const member = await verifyWorkspaceAccess(session.user.id, dept.workspaceId);
+    const isDeptMember = dept.members.some((m) => m.userId === session.user.id);
+    const canSee = member && (member.role === "owner" || member.role === "admin" || dept.createdById === session.user.id || isDeptMember);
+    if (!canSee) {
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+    return NextResponse.json({ success: true, data: dept });
+  }
+
   const workspaceId =
     req.nextUrl.searchParams.get("workspaceId") ?? (await getActiveWorkspaceId(session.user.id));
   if (!workspaceId) {
@@ -33,6 +59,15 @@ export async function GET(req: NextRequest) {
   }
   if (!(await verifyWorkspaceAccess(session.user.id, workspaceId))) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  if (req.nextUrl.searchParams.get("all") === "1") {
+    const names = await db.query.departments.findMany({
+      where: eq(departments.workspaceId, workspaceId),
+      columns: { id: true, name: true },
+      orderBy: (d, { asc }) => [asc(d.name)],
+    });
+    return NextResponse.json({ success: true, data: names });
   }
 
   const all = await db.query.departments.findMany({

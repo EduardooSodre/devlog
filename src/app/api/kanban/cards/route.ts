@@ -10,8 +10,17 @@ import { db } from "@/lib/db";
 import { kanbanCards, kanbanBoards, kanbanColumns } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
-import { sendPushToUser } from "@/lib/push";
-import { canAccessBoard } from "@/lib/workspace";
+import { notifyUser } from "@/lib/notify";
+import { logActivity } from "@/lib/activity";
+import { canAccessBoard, isCardVisibleTo } from "@/lib/workspace";
+import { todayInBrasilia } from "@/lib/date-brasilia";
+
+const STATUS_LABELS: Record<string, string> = {
+  todo: "A Fazer",
+  in_progress: "Em Progresso",
+  done: "Concluído",
+  cancelled: "Cancelado",
+};
 
 /**
  * Converte uma data "YYYY-MM-DD" (vinda do <input type="date">) em meia-noite de
@@ -23,12 +32,6 @@ import { canAccessBoard } from "@/lib/workspace";
  */
 function parseDateOnly(value: string): Date {
   return new Date(`${value}T00:00:00-03:00`);
-}
-
-/** Data de hoje em Brasília, no formato "YYYY-MM-DD" — usada para dar um valor padrão
- * à data de início de um card recém-criado sem depender do fuso horário do servidor. */
-function todayInBrasilia(): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 }
 
 /** Confirma acesso ao board (membro do workspace + visibilidade de departamento) —
@@ -84,11 +87,11 @@ async function findDoneColumnId(boardId: string): Promise<string | undefined> {
   return (done ?? columns[columns.length - 1]).id;
 }
 
-/** Notifica o novo responsável por push, quando a atribuição muda para outra pessoa. */
+/** Notifica o novo responsável (push + in-app), quando a atribuição muda para outra pessoa. */
 async function notifyAssignee(cardId: string, cardTitle: string, boardId: string, assignedToId: string, actorId: string) {
   if (assignedToId === actorId) return; // não notifica quem atribuiu a si mesmo
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
-  await sendPushToUser(assignedToId, {
+  await notifyUser(assignedToId, {
     title: "Nova tarefa atribuída a você",
     body: cardTitle,
     url: board ? `/projetos?board=${board.id}&card=${cardId}` : "/projetos",
@@ -134,6 +137,14 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    await logActivity({
+      cardId: card.id,
+      boardId,
+      actorId: session.user.id,
+      type: "card_created",
+      message: "criou esta tarefa",
+    });
+
     if (assignedToId) {
       await notifyAssignee(card.id, card.title, boardId, assignedToId, session.user.id);
     }
@@ -165,7 +176,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
     }
 
-    if (!(await assertBoardAccess(session.user.id, existing.boardId))) {
+    if (!(await assertBoardAccess(session.user.id, existing.boardId)) || !isCardVisibleTo(session.user.id, existing)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
@@ -217,10 +228,28 @@ export async function PATCH(req: NextRequest) {
       .where(eq(kanbanCards.id, id))
       .returning();
 
+    if (updates.status && updates.status !== existing.status) {
+      await logActivity({
+        cardId: updated.id,
+        boardId: updated.boardId,
+        actorId: session.user.id,
+        type: "status_changed",
+        message: `moveu para ${STATUS_LABELS[updates.status] ?? updates.status}`,
+      });
+    }
+
     if (
       updates.assignedToId &&
       updates.assignedToId !== existing.assignedToId
     ) {
+      const assignee = await db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, updates.assignedToId!) });
+      await logActivity({
+        cardId: updated.id,
+        boardId: updated.boardId,
+        actorId: session.user.id,
+        type: "assigned",
+        message: `atribuiu a ${assignee?.name ?? assignee?.email ?? "alguém"}`,
+      });
       await notifyAssignee(updated.id, updated.title, updated.boardId, updates.assignedToId, session.user.id);
     }
 
@@ -247,7 +276,7 @@ export async function DELETE(req: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
     }
-    if (!(await assertBoardAccess(session.user.id, existing.boardId))) {
+    if (!(await assertBoardAccess(session.user.id, existing.boardId)) || !isCardVisibleTo(session.user.id, existing)) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 

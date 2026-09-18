@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff } from "lucide-react";
+import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock } from "lucide-react";
 import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
+import { BoardAccessPanel } from "./BoardAccessPanel";
 import { DueDateAlerts } from "./DueDateAlerts";
 import { BoardCanvas } from "./BoardCanvas";
 import { ListView } from "./ListView";
@@ -34,9 +35,10 @@ const BOARD_COLORS = ["#4f6ef7", "#22d3ee", "#10b981", "#f59e0b", "#f97316", "#e
 interface Props {
   initialBoards: KanbanBoardWithColumns[];
   workspaceId: string;
+  otherWorkspaces?: { id: string; name: string }[];
 }
 
-export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
+export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces = [] }: Props) {
   const [boards, setBoards] = useState<KanbanBoardWithColumns[]>(initialBoards);
   const [activeBoard, setActiveBoard] = useState<KanbanBoardWithColumns | null>(
     initialBoards[0] ?? null
@@ -44,7 +46,9 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [selectedCard, setSelectedCard] = useState<KanbanCardWithDetails | null>(null);
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
-  const [newBoardDepartmentId, setNewBoardDepartmentId] = useState("");
+  // "personal" (padrão — só o criador vê), "workspace" (todo mundo), ou o id de um
+  // departamento específico.
+  const [newBoardMode, setNewBoardMode] = useState<string>("personal");
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
@@ -70,6 +74,28 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   const [cardFilters, setCardFilters] = useState<CardFilters>(EMPTY_FILTERS);
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
+  const isDraggingRef = useRef(false);
+
+  // "Parece vivo" sem WebSocket: revalida os boards a cada 15s e substitui os dados,
+  // preservando a seleção. ponytail: real-time de verdade (WebSocket/Pusher/Ably) pede
+  // um serviço externo — isso aqui é o suficiente pra ver mudanças de outra pessoa sem
+  // dar F5, e nunca atropela um drag em andamento ou o modal de card aberto.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (selectedCard || isDraggingRef.current) return;
+      try {
+        const res = await fetch(`/api/kanban/boards?workspaceId=${workspaceId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const freshBoards: KanbanBoardWithColumns[] = json.data ?? [];
+        setBoards(freshBoards);
+        setActiveBoard((prev) => (prev ? freshBoards.find((b) => b.id === prev.id) ?? prev : freshBoards[0] ?? null));
+      } catch {
+        // silencioso — próxima tentativa em 15s
+      }
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [workspaceId, selectedCard]);
 
   // "Minhas tarefas" se aplica em qualquer view; "Ocultar concluídas" só nas views de
   // planejamento (lista/cronograma/calendário) — no Painel a coluna Concluído é o
@@ -123,13 +149,16 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   async function handleCreateBoard() {
     if (!newBoardName.trim()) return;
     try {
+      const isPersonal = newBoardMode === "personal";
+      const departmentId = isPersonal || newBoardMode === "workspace" ? undefined : newBoardMode;
       const res = await fetch("/api/kanban/boards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newBoardName.trim(),
           workspaceId,
-          departmentId: newBoardDepartmentId || undefined,
+          isPersonal,
+          departmentId,
         }),
       });
       const { data } = await res.json();
@@ -138,7 +167,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       setBoards((b) => [newBoard, ...b]);
       setActiveBoard(newBoard);
       setNewBoardName("");
-      setNewBoardDepartmentId("");
+      setNewBoardMode("personal");
       setCreatingBoard(false);
       setShowBoardSwitcher(false);
       toast.success("Board criado!");
@@ -205,8 +234,13 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
   }
 
   // ── Drag & Drop ──
+  const onDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+  }, []);
+
   const onDragEnd = useCallback(
     async (result: DropResult) => {
+      isDraggingRef.current = false;
       if (!result.destination || !activeBoard) return;
       const { source, destination, draggableId } = result;
       if (source.droppableId === destination.droppableId && source.index === destination.index)
@@ -275,10 +309,12 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
     setSelectedCard(updated);
   }
 
-  async function handleCardDelete(cardId: string) {
+  async function handleCardDelete(cardId: string, opts?: { skipServerDelete?: boolean }) {
     try {
-      const res = await fetch(`/api/kanban/cards?id=${cardId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      if (!opts?.skipServerDelete) {
+        const res = await fetch(`/api/kanban/cards?id=${cardId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error();
+      }
 
       setBoards((prev) =>
         prev.map((b) => ({
@@ -301,7 +337,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
           : prev
       );
       setSelectedCard(null);
-      toast.success("Tarefa excluída");
+      if (!opts?.skipServerDelete) toast.success("Tarefa excluída");
     } catch {
       toast.error("Erro ao excluir tarefa");
     }
@@ -392,6 +428,47 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
     setEditingBoard(false);
   }
 
+  async function handleChangeBoardVisibility(mode: string) {
+    if (!activeBoard) return;
+    const isPersonal = mode === "personal";
+    const departmentId = isPersonal || mode === "workspace" ? null : mode;
+    try {
+      const res = await fetch("/api/kanban/boards", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: activeBoard.id, isPersonal, departmentId }),
+      });
+      if (!res.ok) throw new Error();
+      const updatedBoard = { ...activeBoard, isPersonal, departmentId };
+      setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? updatedBoard : b)));
+      setActiveBoard(updatedBoard);
+      toast.success(
+        isPersonal ? "Board agora é pessoal" : departmentId ? "Board restrito ao departamento" : "Board visível para todo o workspace"
+      );
+    } catch {
+      toast.error("Erro ao alterar acesso do board");
+    }
+  }
+
+  async function handleArchiveBoard() {
+    if (!activeBoard) return;
+    try {
+      const res = await fetch("/api/kanban/boards", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: activeBoard.id, isArchived: true }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Board arquivado");
+      const updatedBoards = boards.filter((b) => b.id !== activeBoard.id);
+      setBoards(updatedBoards);
+      setActiveBoard(updatedBoards[0] || null);
+      setShowBoardSettings(false);
+    } catch {
+      toast.error("Erro ao arquivar board");
+    }
+  }
+
   const cardsWithDue = boards.flatMap((b) =>
     b.columns.flatMap((col) =>
       col.cards
@@ -411,11 +488,11 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
         <DueDateAlerts cards={cardsWithDue} />
       </div>
       {/* ── Title row: board switcher + settings ── */}
-      <div className="flex items-center justify-between px-6 pt-5 pb-1">
-        <div className="relative min-w-0">
+      <div className="flex items-center justify-between gap-2 px-6 pt-5 pb-1">
+        <div className="relative min-w-0 flex-1">
           <button
             onClick={() => setShowBoardSwitcher((v) => !v)}
-            className="flex items-center gap-1.5 -ml-2 px-2 py-1 rounded-lg text-xl font-semibold hover:bg-card transition-colors max-w-full min-w-0"
+            className="flex items-center gap-1.5 -ml-2 px-2 py-1 rounded-lg text-lg sm:text-xl font-semibold hover:bg-card transition-colors max-w-full min-w-0 w-full"
           >
             {activeBoard && (
               <span
@@ -451,7 +528,8 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ background: board.color ?? "#64748b" }}
                         />
-                        <span className="truncate">{board.name}</span>
+                        <span className="truncate flex-1">{board.name}</span>
+                        {board.isPersonal && <Lock className="w-3 h-3 text-muted-foreground shrink-0" />}
                       </button>
                     ))}
                   </div>
@@ -471,19 +549,18 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                         placeholder="Nome do board…"
                         className="w-full h-9 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
                       />
-                      {departments.length > 0 && (
-                        <select
-                          value={newBoardDepartmentId}
-                          onChange={(e) => setNewBoardDepartmentId(e.target.value)}
-                          title="Restringir a um departamento"
-                          className="w-full h-9 px-2 bg-background border border-border rounded-lg text-xs text-muted-foreground focus:outline-none focus:border-primary"
-                        >
-                          <option value="">Todo o workspace</option>
-                          {departments.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
-                      )}
+                      <select
+                        value={newBoardMode}
+                        onChange={(e) => setNewBoardMode(e.target.value)}
+                        title="Quem vai ver este board"
+                        className="w-full h-9 px-2 bg-background border border-border rounded-lg text-xs text-muted-foreground focus:outline-none focus:border-primary"
+                      >
+                        <option value="personal">Pessoal (só você)</option>
+                        <option value="workspace">Todo o workspace</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleCreateBoard}
@@ -534,7 +611,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                     setEditingBoard(false);
                   }}
                 />
-                <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
+                <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-2xl shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200 max-h-[80vh] overflow-y-auto">
                   <div className="px-3 py-2 border-b border-border mb-1">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Configurações</p>
                   </div>
@@ -590,6 +667,25 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
                       <Palette className="w-4 h-4" /> Editar Nome/Cor
                     </button>
                   )}
+
+                  <div className="my-1 border-t border-border" />
+
+                  <BoardAccessPanel
+                    workspaceId={workspaceId}
+                    isPersonal={activeBoard.isPersonal}
+                    departmentId={activeBoard.departmentId}
+                    departments={departments}
+                    onChangeVisibility={handleChangeBoardVisibility}
+                  />
+
+                  <div className="my-1 border-t border-border" />
+
+                  <button
+                    onClick={handleArchiveBoard}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors"
+                  >
+                    <Archive className="w-4 h-4" /> Arquivar Board
+                  </button>
 
                   <button
                     onClick={handleDeleteBoard}
@@ -680,7 +776,7 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
       ) : view === "files" ? (
         <FilesView columns={filteredColumns} onCardClick={setSelectedCard} />
       ) : (
-        <DragDropContext onDragEnd={onDragEnd}>
+        <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <BoardCanvas>
           <div className="flex gap-6 p-6 h-full items-stretch w-max">
             {boardColumns.map((column) => (
@@ -753,9 +849,13 @@ export function KanbanClientPage({ initialBoards, workspaceId }: Props) {
           card={selectedCard}
           workspaceId={workspaceId}
           allBoards={boards.map((b) => ({ id: b.id, name: b.name, color: b.color }))}
+          otherWorkspaces={otherWorkspaces}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
           onDelete={handleCardDelete}
+          // Depois de MOVER pra outro workspace, o card some do board atual — mesmo
+          // efeito local de uma exclusão (o card real continua existindo, só que lá).
+          onMovedAway={() => handleCardDelete(selectedCard.id, { skipServerDelete: true })}
         />
       )}
     </div>

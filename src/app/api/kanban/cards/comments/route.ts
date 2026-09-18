@@ -7,28 +7,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cardComments, kanbanCards, kanbanBoards } from "@/lib/db/schema";
+import { cardComments, workspaceMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { canAccessBoard } from "@/lib/workspace";
+import { assertCardAccess } from "@/lib/workspace";
+import { logActivity } from "@/lib/activity";
+import { extractMentionedUserIds } from "@/lib/mentions";
+import { notifyUser } from "@/lib/notify";
 
 const createCommentSchema = z.object({
   cardId: z.string(),
   content: z.string().min(1).max(4000),
 });
-
-/** Confirma acesso ao card (membro do workspace + visibilidade de departamento) —
- * sem isso, qualquer usuário autenticado poderia ler/escrever comentários em cards de
- * outros workspaces, ou de boards restritos a um departamento do qual não participa. */
-async function assertCardAccess(userId: string, cardId: string) {
-  const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
-  if (!card) return null;
-
-  const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
-  if (!board) return null;
-
-  return (await canAccessBoard(userId, board)) ? card : null;
-}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -66,9 +56,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (!(await assertCardAccess(session.user.id, parsed.data.cardId))) {
+  const access = await assertCardAccess(session.user.id, parsed.data.cardId);
+  if (!access) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
+  const { card, board } = access;
 
   const [comment] = await db
     .insert(cardComments)
@@ -83,6 +75,32 @@ export async function POST(req: NextRequest) {
     where: eq(cardComments.id, comment.id),
     with: { author: { columns: { id: true, name: true, image: true } } },
   });
+
+  await logActivity({
+    cardId: card.id,
+    boardId: card.boardId,
+    actorId: session.user.id,
+    type: "comment_added",
+    message: "comentou",
+  });
+
+  // Menções (@Nome) — avisa quem foi citado, exceto o próprio autor do comentário.
+  const workspaceMembersList = await db.query.workspaceMembers.findMany({
+    where: eq(workspaceMembers.workspaceId, board.workspaceId),
+    with: { user: { columns: { id: true, name: true } } },
+  });
+  const mentionedIds = extractMentionedUserIds(
+    parsed.data.content,
+    workspaceMembersList.map((m) => m.user),
+    session.user.id
+  );
+  for (const userId of mentionedIds) {
+    await notifyUser(userId, {
+      title: `${withAuthor?.author?.name ?? "Alguém"} mencionou você`,
+      body: card.title,
+      url: `/projetos?board=${card.boardId}&card=${card.id}`,
+    });
+  }
 
   return NextResponse.json({ success: true, data: withAuthor }, { status: 201 });
 }

@@ -10,23 +10,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { cardBoards, kanbanCards, kanbanBoards } from "@/lib/db/schema";
+import { cardBoards, kanbanBoards } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { canAccessBoard } from "@/lib/workspace";
+import { assertCardAccess, canAccessBoard } from "@/lib/workspace";
 
 const schema = z.object({ cardId: z.string(), boardId: z.string() });
 
 async function assertAccess(userId: string, cardId: string, boardId: string) {
-  const card = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
+  // Precisa enxergar o card (dono do card + visibilidade "private" incluídas) E o
+  // board que está sendo vinculado.
+  if (!(await assertCardAccess(userId, cardId))) return false;
+
   const targetBoard = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
-  if (!card || !targetBoard) return false;
-
-  const ownerBoard = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, card.boardId) });
-  if (!ownerBoard) return false;
-
-  // Precisa enxergar tanto o board dono do card quanto o board que está sendo vinculado.
-  return (await canAccessBoard(userId, ownerBoard)) && (await canAccessBoard(userId, targetBoard));
+  return !!targetBoard && (await canAccessBoard(userId, targetBoard));
 }
 
 export async function POST(req: NextRequest) {
