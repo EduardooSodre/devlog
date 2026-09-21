@@ -124,27 +124,48 @@ export default async function BillingPage() {
         </div>
       </section>
 
-      {currentPlan === "free" && workspace && (
+      {currentPlan !== "enterprise" && workspace && (
         <section>
-          <div className="bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border border-primary/30 rounded-2xl p-6">
-            <h2 className="font-semibold text-primary mb-2">DevLog Pro</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Remova todos os limites e desbloqueie recursos avançados.
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-6">
-              {PLANS.pro.features.map((f) => (
-                <div key={f} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  {f}
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+            Escolha um plano
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(["pro", "enterprise"] as const)
+              .filter((id) => id !== currentPlan)
+              .map((id) => (
+                <div
+                  key={id}
+                  className={cn(
+                    "border rounded-2xl p-6 flex flex-col",
+                    id === "pro"
+                      ? "bg-gradient-to-br from-primary/20 via-primary/10 to-transparent border-primary/30"
+                      : "bg-gradient-to-br from-amber-400/20 via-amber-400/10 to-transparent border-amber-400/30"
+                  )}
+                >
+                  <h3 className={cn("font-semibold mb-1", id === "pro" ? "text-primary" : "text-amber-400")}>
+                    DevLog {PLANS[id].name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">{PLANS[id].description}</p>
+                  <div className="grid gap-2 mb-6 flex-1">
+                    {PLANS[id].features.map((f) => (
+                      <div key={f} className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        {f}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xl font-bold">{PLANS[id].priceLabel}</p>
+                    <BillingActions
+                      workspaceId={workspace.id}
+                      isPro={false}
+                      plan={id}
+                      variant="cta"
+                      label={`Escolher ${PLANS[id].name}`}
+                    />
+                  </div>
                 </div>
               ))}
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-bold">{PLANS.pro.priceLabel}</p>
-              </div>
-              <BillingActions workspaceId={workspace.id} isPro={false} variant="cta" />
-            </div>
           </div>
         </section>
       )}

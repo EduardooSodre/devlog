@@ -68,6 +68,7 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProp
   }
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  const isBottomActive = (href: string) => pathname === href;
 
   return (
     <aside
@@ -168,7 +169,7 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProp
         <ThemeToggle collapsed={collapsed} />
         {bottomItems.map((item) => {
           const Icon = item.icon;
-          const active = isActive(item.href);
+          const active = isBottomActive(item.href);
 
           if (collapsed) {
             return (
