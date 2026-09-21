@@ -154,7 +154,7 @@ export default async function BillingPage() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3">
                     <p className="text-xl font-bold">{PLANS[id].priceLabel}</p>
                     <BillingActions
                       workspaceId={workspace.id}
