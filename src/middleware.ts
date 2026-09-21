@@ -5,9 +5,13 @@
  * Rotas protegidas: /dashboard, /projetos, /docs, /settings, /api/*
  */
 
-import { auth } from "@/lib/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { authConfig } from "@/lib/auth.config";
+
+// Instância Edge-only, sem adapter/db/bcrypt — só checa a sessão via JWT do
+// cookie. A instância completa (auth.ts) roda nas rotas de API, em Node.
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_ROUTES = ["/", "/login", "/register"];
 const AUTH_ROUTES = ["/login", "/register"]; // redireciona para /dashboard se já logado

@@ -17,6 +17,7 @@ import { db } from "./db";
 import { users } from "./db/schema";
 import { z } from "zod";
 import { resolveSignupWorkspace } from "./org-domain";
+import { authConfig } from "./auth.config";
 
 // Schema de validação para login com credentials
 const credentialsSchema = z.object({
@@ -25,6 +26,7 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   adapter: DrizzleAdapter(db),
 
   providers: [
@@ -75,30 +77,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
 
-  // JWT stateless — não usa tabela de sessões
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 dias
-  },
-
-  callbacks: {
-    // Adiciona o ID do usuário no token JWT
-    jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-      }
-      return token;
-    },
-
-    // Expõe o ID na session (client-side)
-    session({ session, token }) {
-      if (token.id) {
-        session.user.id = token.id as string;
-      }
-      return session;
-    },
-  },
-
   events: {
     // Só dispara para contas criadas via adapter (OAuth) — o cadastro por e-mail/senha
     // insere direto na tabela `users` e nunca passa por aqui. Isso é o que torna seguro
@@ -111,10 +89,5 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // usuário recém-criado via OAuth precisa do onboarding como qualquer outro.
       await db.update(users).set({ hasOnboarded: false }).where(eq(users.id, user.id));
     },
-  },
-
-  pages: {
-    signIn: "/login",
-    error: "/login",
   },
 });
