@@ -69,11 +69,19 @@ export async function POST(req: NextRequest) {
         const workspaceId = sub.metadata?.workspaceId;
         if (!workspaceId) break;
 
+        // A partir de certas versões da API, current_period_end saiu da raiz do
+        // Subscription e passou a viver em cada item (cobrança por item) — o
+        // payload bruto do evento pode não ter mais o campo no nível raiz. Os
+        // tipos do SDK (pinado em 2024-04-10) não conhecem esse formato novo,
+        // daí o cast pro shape real que chega no webhook.
+        const item = sub.items.data[0] as unknown as { current_period_end?: number } | undefined;
+        const periodEnd = item?.current_period_end ?? sub.current_period_end;
+
         await db
           .update(subscriptions)
           .set({
             status: sub.status as any,
-            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+            currentPeriodEnd: new Date(periodEnd * 1000),
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             updatedAt: new Date(),
           })
