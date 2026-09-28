@@ -44,7 +44,7 @@ interface Props {
   currentUserRole?: string;
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
-  onDelete: (cardId: string) => void;
+  onDelete: (cardId: string, opts?: { skipServerDelete?: boolean }) => void;
   /** Chamado depois de MOVER (não copiar) o card pra outro workspace — ele deixa de
    * existir no board atual. */
   onMovedAway?: () => void;
@@ -290,7 +290,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
         method: "DELETE",
       });
       if (!res.ok) throw new Error();
-      onDelete(card.id);
+      onDelete(card.id, { skipServerDelete: true });
       toast.success("Card excluído");
     } catch {
       toast.error("Erro ao excluir card");
