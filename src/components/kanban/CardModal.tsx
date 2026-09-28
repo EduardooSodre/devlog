@@ -12,6 +12,8 @@ import type { CardSubtaskWithDetails, KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
+import { useSession } from "next-auth/react";
+import { canManageCard, canWorkOnCard } from "@/lib/permissions";
 
 interface WorkspaceMember {
   id: string;
@@ -39,6 +41,7 @@ interface Props {
   workspaceId: string;
   allBoards: BoardOption[];
   otherWorkspaces?: { id: string; name: string }[];
+  currentUserRole?: string;
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
   onDelete: (cardId: string) => void;
@@ -61,7 +64,14 @@ function toDateInputValue(date: Date | string | null | undefined): string {
   return `${year}-${month}-${day}`;
 }
 
-export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], onClose, onUpdate, onDelete, onMovedAway }: Props) {
+export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], currentUserRole = "member", onClose, onUpdate, onDelete, onMovedAway }: Props) {
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id ?? "";
+  // Mesmas regras do servidor: o que alguém criou só ela (ou admin) edita/apaga; o
+  // responsável pode concluir e mexer nas subtarefas, mas não reescrever a tarefa.
+  const canManage = canManageCard(currentUserId, card, currentUserRole);
+  const canWork = canWorkOnCard(currentUserId, card, currentUserRole);
+  const lockedClass = canManage ? "" : "pointer-events-none opacity-70";
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
@@ -462,9 +472,9 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
           <div className="flex items-start gap-3 flex-1 mr-4">
             <button
               onClick={handleComplete}
-              disabled={completing}
-              title={isDone ? "Reabrir tarefa" : "Marcar como concluída"}
-              className="shrink-0 mt-1"
+              disabled={completing || !canWork}
+              title={!canWork ? "Só quem criou, o responsável ou um admin pode concluir" : isDone ? "Reabrir tarefa" : "Marcar como concluída"}
+              className="shrink-0 mt-1 disabled:cursor-not-allowed"
             >
               {completing ? (
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -478,7 +488,8 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full text-lg font-semibold bg-transparent focus:outline-none border-b border-transparent focus:border-primary transition-colors pb-0.5"
+                readOnly={!canManage}
+                className="w-full text-lg font-semibold bg-transparent focus:outline-none border-b border-transparent focus:border-primary transition-colors pb-0.5 read-only:focus:border-transparent"
               />
               <div className="flex items-center gap-2 mt-2">
                 <span
@@ -513,13 +524,15 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
             {visibility === "private" ? <Lock className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5" />}
             {visibility === "private" ? "Esta tarefa é privada — só você e o responsável veem." : "Esta tarefa é pública para quem acessa o board."}
           </span>
-          <button
-            onClick={handleToggleVisibility}
-            disabled={savingVisibility}
-            className="text-primary font-medium hover:underline shrink-0 disabled:opacity-50"
-          >
-            {visibility === "private" ? "Tornar pública" : "Tornar privada"}
-          </button>
+          {canManage && (
+            <button
+              onClick={handleToggleVisibility}
+              disabled={savingVisibility}
+              className="text-primary font-medium hover:underline shrink-0 disabled:opacity-50"
+            >
+              {visibility === "private" ? "Tornar pública" : "Tornar privada"}
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -549,8 +562,18 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
           {/* ── Details tab ── */}
           {tab === "details" && (
             <div className="space-y-5">
+              {!canManage && (
+                <div className="flex items-start gap-2 text-xs text-muted-foreground bg-background border border-border rounded-xl p-3">
+                  <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    Só {card.createdBy?.name ?? "quem criou"} ou um administrador pode editar esta tarefa.
+                    {canWork ? " Como responsável, você pode concluí-la e marcar as subtarefas." : " Você pode comentar."}
+                  </span>
+                </div>
+              )}
+
               {/* Priority */}
-              <div>
+              <div className={lockedClass}>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                   Prioridade
                 </label>
@@ -574,7 +597,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               </div>
 
               {/* Difficulty */}
-              <div>
+              <div className={lockedClass}>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                   Dificuldade
                 </label>
@@ -598,7 +621,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               </div>
 
               {/* Responsável */}
-              <div>
+              <div className={lockedClass}>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                   Responsável
                 </label>
@@ -606,7 +629,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               </div>
 
               {/* Início + Prazo */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className={cn("grid grid-cols-2 gap-3", lockedClass)}>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                     Início
@@ -632,7 +655,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               </div>
 
               {/* Projetos */}
-              <div>
+              <div className={lockedClass}>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                   Projetos
                 </label>
@@ -687,7 +710,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
               </div>
 
               {/* Mover/copiar para outro workspace */}
-              {otherWorkspaces.length > 0 && (
+              {otherWorkspaces.length > 0 && canManage && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                     Enviar para outro workspace
@@ -775,7 +798,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                   {subtasks.map((s) => (
                     <div key={s.id} className="group py-1">
                       <div className="flex items-center gap-2">
-                        <button onClick={() => handleToggleSubtask(s.id, !s.isDone)} className="shrink-0">
+                        <button
+                          onClick={() => handleToggleSubtask(s.id, !s.isDone)}
+                          disabled={!canWork && s.assignedToId !== currentUserId}
+                          className="shrink-0 disabled:cursor-not-allowed"
+                        >
                           {s.isDone ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                           ) : (
@@ -783,7 +810,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                           )}
                         </button>
                         <button
-                          onClick={() => setExpandedSubtaskId(expandedSubtaskId === s.id ? null : s.id)}
+                          onClick={() => canWork && setExpandedSubtaskId(expandedSubtaskId === s.id ? null : s.id)}
                           className={cn("flex-1 text-left text-sm", s.isDone && "line-through text-muted-foreground")}
                         >
                           {s.title}
@@ -804,12 +831,14 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                             <UserCircle2 className="w-3 h-3 text-muted-foreground" />
                           )}
                         </span>
-                        <button
-                          onClick={() => handleDeleteSubtask(s.id)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canWork && (
+                          <button
+                            onClick={() => handleDeleteSubtask(s.id)}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
 
                       {expandedSubtaskId === s.id && (
@@ -835,7 +864,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center gap-2 mt-2">
+                {canWork && <div className="flex items-center gap-2 mt-2">
                   <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
                   <input
                     value={newSubtask}
@@ -847,11 +876,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                     placeholder="Adicionar subtarefa…"
                     className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground/60 py-1"
                   />
-                </div>
+                </div>}
               </div>
 
               {/* Description */}
-              <div>
+              <div className={lockedClass}>
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
                   Descrição
                 </label>
@@ -1056,9 +1085,9 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
 
               <button
                 onClick={handleComplete}
-                disabled={completing}
+                disabled={completing || !canWork}
                 className={cn(
-                  "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all",
+                  "w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed",
                   isDone
                     ? "bg-card border border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
                     : "bg-emerald-500 text-white hover:bg-emerald-500/90 shadow-lg shadow-emerald-500/20"
@@ -1083,29 +1112,33 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
             <span className="text-xs text-muted-foreground font-mono">
               #{card.id.slice(0, 8)}
             </span>
-            <button
-              onClick={handleDelete}
-              className="p-2 rounded-lg hover:bg-red-400/10 text-muted-foreground hover:text-red-400 transition-colors"
-              title="Excluir card"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {canManage && (
+              <button
+                onClick={handleDelete}
+                className="p-2 rounded-lg hover:bg-red-400/10 text-muted-foreground hover:text-red-400 transition-colors"
+                title="Excluir card"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
           <div className="flex gap-2">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              Cancelar
+              {canManage ? "Cancelar" : "Fechar"}
             </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Salvar
-            </button>
+            {canManage && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Salvar
+              </button>
+            )}
           </div>
         </div>
       </div>

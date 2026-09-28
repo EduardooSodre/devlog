@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Mail, Users } from "lucide-react";
+import { Copy, Crown, Loader2, Mail, Users, X } from "lucide-react";
 import { initials } from "@/lib/utils";
 
 interface DeptOption {
@@ -10,60 +10,94 @@ interface DeptOption {
   name: string;
 }
 
-interface DeptMember {
-  userId: string;
-  user: { id: string; name: string | null; image: string | null };
+interface Person {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
 }
 
 interface Props {
-  workspaceId: string;
+  boardId: string;
   isPersonal: boolean;
   departmentId: string | null;
   departments: DeptOption[];
+  canManage: boolean;
   onChangeVisibility: (mode: "personal" | "workspace" | string) => void;
 }
 
-/** Painel "quem tem acesso a este board" — pessoal (só o criador), um departamento
- * específico, ou todo o workspace. Convite direto por e-mail e troca de visibilidade
- * na hora, sem precisar ir em Configurações. */
-export function BoardAccessPanel({ workspaceId, isPersonal, departmentId, departments, onChangeVisibility }: Props) {
-  const [members, setMembers] = useState<DeptMember[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviting, setInviting] = useState(false);
+/**
+ * "Quem tem acesso a este board": quem criou + quem foi adicionado diretamente, e a
+ * visibilidade geral (privado / departamento / workspace). Adicionar por e-mail é
+ * automático: quem já está no workspace entra no board na hora; quem não está recebe
+ * convite que já o coloca no workspace e no board ao aceitar.
+ */
+export function BoardAccessPanel({ boardId, isPersonal, departmentId, departments, canManage, onChangeVisibility }: Props) {
+  const [creator, setCreator] = useState<Person | null>(null);
+  const [members, setMembers] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [pendingLink, setPendingLink] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!departmentId) {
-      setMembers(null);
-      return;
-    }
-    setLoading(true);
-    fetch(`/api/workspaces/departments?id=${departmentId}`)
+  function load() {
+    fetch(`/api/kanban/boards/members?boardId=${boardId}`)
       .then((res) => res.json())
-      .then((json) => setMembers(json.data?.members ?? []))
-      .catch(() => setMembers([]))
+      .then((json) => {
+        setCreator(json.data?.creator ?? null);
+        setMembers(json.data?.members ?? []);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [departmentId]);
+  }
 
-  async function handleInvite() {
-    if (!inviteEmail.trim()) return;
-    setInviting(true);
+  useEffect(load, [boardId]);
+
+  async function handleAdd() {
+    if (!email.trim()) return;
+    setAdding(true);
+    setPendingLink(null);
     try {
-      const res = await fetch("/api/workspaces/invites", {
+      const res = await fetch("/api/kanban/boards/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), workspaceId, departmentId: departmentId ?? undefined }),
+        body: JSON.stringify({ boardId, email: email.trim() }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Erro ao convidar");
-      toast.success(json.data?.emailSent ? "Convite enviado por e-mail!" : "Convite criado — copie o link em Configurações › Convites");
-      setInviteEmail("");
+      if (!res.ok) throw new Error(json.error ?? "Erro ao adicionar");
+
+      if (json.data.status === "added") {
+        toast.success("Adicionado ao board — a pessoa foi avisada");
+        load();
+      } else if (json.data.emailSent) {
+        toast.success("Convite enviado — ao aceitar, a pessoa já entra neste board");
+      } else {
+        setPendingLink(json.data.inviteUrl);
+        toast.success("Convite criado — copie o link abaixo e envie pra pessoa");
+      }
+      setEmail("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao convidar");
+      toast.error(err instanceof Error ? err.message : "Erro ao adicionar");
     } finally {
-      setInviting(false);
+      setAdding(false);
     }
   }
+
+  async function handleRemove(userId: string) {
+    const prev = members;
+    setMembers((m) => m.filter((p) => p.id !== userId));
+    const res = await fetch(`/api/kanban/boards/members?boardId=${boardId}&userId=${userId}`, { method: "DELETE" });
+    if (!res.ok) {
+      setMembers(prev);
+      toast.error("Erro ao remover");
+    }
+  }
+
+  const visibilityText = isPersonal
+    ? "Privado — só as pessoas abaixo veem este board."
+    : departmentId
+    ? `Todo o departamento ${departments.find((d) => d.id === departmentId)?.name ?? ""} vê, mais as pessoas abaixo.`
+    : "Todo o workspace vê este board.";
 
   return (
     <div className="p-2 space-y-3">
@@ -71,79 +105,106 @@ export function BoardAccessPanel({ workspaceId, isPersonal, departmentId, depart
         <Users className="w-4 h-4 text-primary" />
         Quem tem acesso
       </div>
+      <p className="text-xs text-muted-foreground px-1">{visibilityText}</p>
 
-      {isPersonal ? (
-        <p className="text-xs text-muted-foreground px-1">
-          Pessoal — só você vê este board. Compartilhe com o time abaixo.
-        </p>
-      ) : !departmentId ? (
-        <p className="text-xs text-muted-foreground px-1">
-          Visível para todo o workspace — qualquer membro consegue ver este board.
-        </p>
-      ) : loading ? (
+      {loading ? (
         <div className="flex justify-center py-2">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="flex flex-wrap gap-1.5 px-1">
-          {(members ?? []).map((m) => (
-            <div
-              key={m.userId}
-              title={m.user.name ?? undefined}
-              className="flex items-center gap-1.5 text-xs bg-background border border-border rounded-full pl-1 pr-2 py-1"
+        <div className="space-y-1 px-1">
+          {creator && <PersonRow person={creator} badge={<Crown className="w-3 h-3 text-amber-400" />} />}
+          {members.map((m) => (
+            <PersonRow
+              key={m.id}
+              person={m}
+              onRemove={canManage ? () => handleRemove(m.id) : undefined}
+            />
+          ))}
+        </div>
+      )}
+
+      {canManage && (
+        <>
+          <div className="flex items-center gap-1.5 px-1">
+            <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              type="email"
+              placeholder="Adicionar pessoa por e-mail…"
+              className="flex-1 h-8 bg-background border border-border rounded-lg px-2 text-xs focus:outline-none focus:border-primary transition-colors min-w-0"
+            />
+            <button
+              onClick={handleAdd}
+              disabled={adding || !email.trim()}
+              className="shrink-0 bg-primary text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden shrink-0">
-                {m.user.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.user.image} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  initials(m.user.name || "?")
-                )}
-              </span>
-              <span className="truncate max-w-[7rem]">{m.user.name}</span>
+              {adding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Adicionar"}
+            </button>
+          </div>
+
+          {pendingLink && (
+            <div className="flex items-center gap-2 mx-1 p-2 bg-background rounded-lg border border-border text-xs">
+              <code className="flex-1 truncate text-muted-foreground">{pendingLink}</code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(pendingLink);
+                  toast.success("Link copiado!");
+                }}
+                className="text-primary hover:text-primary/80"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
             </div>
-          ))}
-          {members?.length === 0 && <p className="text-xs text-muted-foreground">Ninguém neste departamento ainda.</p>}
-        </div>
-      )}
+          )}
 
-      {!isPersonal && (
-        <div className="flex items-center gap-1.5 px-1">
-          <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-          <input
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-            type="email"
-            placeholder="Convidar por e-mail…"
-            className="flex-1 h-8 bg-background border border-border rounded-lg px-2 text-xs focus:outline-none focus:border-primary transition-colors min-w-0"
-          />
-          <button
-            onClick={handleInvite}
-            disabled={inviting || !inviteEmail.trim()}
-            className="shrink-0 bg-primary text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {inviting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Convidar"}
-          </button>
-        </div>
+          <div className="px-1">
+            <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 block">
+              Visibilidade
+            </label>
+            <select
+              value={isPersonal ? "personal" : departmentId ?? "workspace"}
+              onChange={(e) => onChangeVisibility(e.target.value)}
+              className="w-full h-8 px-2 bg-background border border-border rounded-lg text-xs focus:outline-none focus:border-primary transition-colors"
+            >
+              <option value="personal">Privado (você e quem adicionar)</option>
+              <option value="workspace">Todo o workspace</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>Departamento: {d.name}</option>
+              ))}
+            </select>
+          </div>
+        </>
       )}
+    </div>
+  );
+}
 
-      <div className="px-1">
-        <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 block">
-          Quem vai ver este board
-        </label>
-        <select
-          value={isPersonal ? "personal" : departmentId ?? "workspace"}
-          onChange={(e) => onChangeVisibility(e.target.value)}
-          className="w-full h-8 px-2 bg-background border border-border rounded-lg text-xs focus:outline-none focus:border-primary transition-colors"
+function PersonRow({ person, badge, onRemove }: { person: Person; badge?: React.ReactNode; onRemove?: () => void }) {
+  return (
+    <div className="group flex items-center gap-2 text-xs py-1">
+      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden shrink-0">
+        {person.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={person.image} alt="" className="w-full h-full object-cover" />
+        ) : (
+          initials(person.name || person.email)
+        )}
+      </span>
+      <span className="flex-1 min-w-0 truncate">{person.name ?? person.email}</span>
+      {badge}
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          title="Remover do board"
+          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
         >
-          <option value="personal">Pessoal (só você)</option>
-          <option value="workspace">Todo o workspace</option>
-          {departments.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-      </div>
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }

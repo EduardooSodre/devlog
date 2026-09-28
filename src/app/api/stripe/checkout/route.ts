@@ -18,14 +18,23 @@ export async function POST(req: Request) {
     let workspaceId = body.workspaceId as string | undefined;
     const targetPlan = body.plan === "enterprise" ? "enterprise" : "pro";
 
+    let role: string | undefined;
     if (workspaceId) {
       const member = await verifyWorkspaceAccess(session.user.id, workspaceId);
       if (!member) {
         return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
       }
+      role = member.role;
     } else {
       const ctx = await getActiveWorkspace(session.user.id);
       workspaceId = ctx?.workspaceId;
+      role = ctx?.membership.role;
+    }
+
+    // Pagamento é responsabilidade de quem é dono do workspace — um membro comum não
+    // deve conseguir assinar/trocar plano em nome da empresa.
+    if (role !== "owner") {
+      return NextResponse.json({ error: "Só o responsável pelo workspace pode gerenciar o pagamento" }, { status: 403 });
     }
 
     if (!workspaceId) {

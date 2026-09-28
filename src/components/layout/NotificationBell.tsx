@@ -91,7 +91,9 @@ export function NotificationBell({ collapsed }: { collapsed?: boolean }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-full bottom-0 ml-2 w-80 max-h-96 bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
+          {/* Abre pra baixo a partir do sino (que fica no topo da tela) — ancorado por
+              baixo ele crescia pra cima e saía da tela. */}
+          <div className="absolute left-full top-0 ml-2 w-[min(20rem,calc(100vw-6rem))] max-h-[min(28rem,calc(100vh-6rem))] bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
               <span className="text-sm font-semibold">Notificações</span>
               {unreadCount > 0 && (

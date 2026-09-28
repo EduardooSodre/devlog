@@ -72,6 +72,7 @@ export default async function ProjetosPage() {
       initialBoards={boards as Parameters<typeof KanbanClientPage>[0]["initialBoards"]}
       workspaceId={workspaceId ?? ""}
       otherWorkspaces={otherWorkspaces}
+      currentUserRole={membership?.role ?? "member"}
     />
   );
 }

@@ -12,7 +12,12 @@ import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { notifyUser } from "@/lib/notify";
 import { logActivity } from "@/lib/activity";
-import { canAccessBoard, isCardVisibleTo } from "@/lib/workspace";
+import { assertCardAccess, canAccessBoard, canManageCard, canWorkOnCard, getMemberRole } from "@/lib/workspace";
+
+// Campos que mudam O QUE é a tarefa (só quem criou ou admin) vs. campos de andamento
+// (quem criou, admin ou o responsável — quem recebeu a tarefa precisa poder concluí-la).
+const MANAGE_FIELDS = ["title", "description", "priority", "difficulty", "startDate", "dueDate", "assignedToId", "visibility"] as const;
+const WORK_FIELDS = ["status", "completedAt", "completionNotes", "columnId", "order"] as const;
 import { todayInBrasilia } from "@/lib/date-brasilia";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -171,13 +176,19 @@ export async function PATCH(req: NextRequest) {
 
     const { id, ...updates } = parsed.data;
 
-    const existing = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, id) });
-    if (!existing) {
-      return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
-    }
-
-    if (!(await assertBoardAccess(session.user.id, existing.boardId)) || !isCardVisibleTo(session.user.id, existing)) {
+    const access = await assertCardAccess(session.user.id, id);
+    if (!access) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+    const existing = access.card;
+    const role = await getMemberRole(session.user.id, access.board.workspaceId);
+
+    const touches = (fields: readonly string[]) => fields.some((f) => (updates as Record<string, unknown>)[f] !== undefined);
+    if (touches(MANAGE_FIELDS) && !canManageCard(session.user.id, existing, role)) {
+      return NextResponse.json({ error: "Só quem criou a tarefa (ou um administrador) pode editá-la" }, { status: 403 });
+    }
+    if (touches(WORK_FIELDS) && !canWorkOnCard(session.user.id, existing, role)) {
+      return NextResponse.json({ error: "Só quem criou, o responsável ou um administrador pode mover/concluir esta tarefa" }, { status: 403 });
     }
 
     // Se estiver movendo o card para outro board, confere acesso ao destino também
@@ -272,12 +283,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
     }
 
-    const existing = await db.query.kanbanCards.findFirst({ where: eq(kanbanCards.id, cardId) });
-    if (!existing) {
-      return NextResponse.json({ error: "Card não encontrado" }, { status: 404 });
-    }
-    if (!(await assertBoardAccess(session.user.id, existing.boardId)) || !isCardVisibleTo(session.user.id, existing)) {
+    const access = await assertCardAccess(session.user.id, cardId);
+    if (!access) {
       return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    }
+    const role = await getMemberRole(session.user.id, access.board.workspaceId);
+    if (!canManageCard(session.user.id, access.card, role)) {
+      return NextResponse.json({ error: "Só quem criou a tarefa (ou um administrador) pode excluí-la" }, { status: 403 });
     }
 
     await db.delete(kanbanCards).where(eq(kanbanCards.id, cardId));

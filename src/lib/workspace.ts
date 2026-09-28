@@ -11,13 +11,15 @@ import {
   subscriptions,
   departments,
   departmentMembers,
+  boardMembers,
 } from "@/lib/db/schema";
 import { eq, and, count, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { getPlanConfig, isWithinLimit, type PlanId } from "@/lib/plans";
 import { isTrialExpired } from "@/lib/org-domain";
 import { isCardVisibleTo } from "@/lib/card-visibility";
+import { isAdminRole, canManageCard, canWorkOnCard, canManageBoard } from "@/lib/permissions";
 
-export { isCardVisibleTo };
+export { isCardVisibleTo, isAdminRole, canManageCard, canWorkOnCard, canManageBoard };
 
 export const WORKSPACE_COOKIE = "devlog-workspace";
 
@@ -73,22 +75,30 @@ export async function verifyWorkspaceAccess(userId: string, workspaceId: string)
 /**
  * O check de acesso de verdade para um board específico (e por extensão, seus cards,
  * comentários e anexos): não basta ser membro do workspace.
- * - "Pessoal": só quem criou vê — nem owner/admin do workspace tem bypass aqui, é
- *   rascunho individual de propósito (mesma lógica do card `visibility: private`).
+ * - Adicionado diretamente ao board (boardMembers): sempre vê, qualquer que seja o tipo.
+ * - "Privado" (isPersonal): só quem criou + quem foi adicionado — nem owner/admin do
+ *   workspace tem bypass aqui (mesma lógica do card `visibility: private`).
  * - Restrito a departamento: só quem está nesse departamento (ou é owner/admin).
- * - Nem pessoal nem com departamento: visível pro workspace inteiro.
+ * - Nem privado nem com departamento: visível pro workspace inteiro.
  * Usar isto em vez de `verifyWorkspaceAccess` sozinho em qualquer rota que opera sobre
  * um board/card já existente.
  */
 export async function canAccessBoard(
   userId: string,
-  board: { workspaceId: string; departmentId: string | null; isPersonal: boolean; createdById: string }
+  board: { id: string; workspaceId: string; departmentId: string | null; isPersonal: boolean; createdById: string }
 ): Promise<boolean> {
   const member = await verifyWorkspaceAccess(userId, board.workspaceId);
   if (!member) return false;
-  if (board.isPersonal) return board.createdById === userId;
+  if (board.createdById === userId) return true;
+
+  const addedDirectly = await db.query.boardMembers.findFirst({
+    where: and(eq(boardMembers.boardId, board.id), eq(boardMembers.userId, userId)),
+  });
+  if (addedDirectly) return true;
+
+  if (board.isPersonal) return false;
   if (!board.departmentId) return true;
-  if (member.role === "owner" || member.role === "admin") return true;
+  if (isAdminRole(member.role)) return true;
 
   const inDept = await db.query.departmentMembers.findFirst({
     where: and(
@@ -97,6 +107,22 @@ export async function canAccessBoard(
     ),
   });
   return !!inDept;
+}
+
+/** Acesso ao board E permissão de gerenciá-lo (criador ou owner/admin). */
+export async function canManageBoardAccess(
+  userId: string,
+  board: { id: string; workspaceId: string; departmentId: string | null; isPersonal: boolean; createdById: string }
+): Promise<boolean> {
+  const member = await verifyWorkspaceAccess(userId, board.workspaceId);
+  if (!member || !canManageBoard(userId, board, member.role)) return false;
+  return canAccessBoard(userId, board);
+}
+
+/** Papel do usuário no workspace (ou null se não for membro). */
+export async function getMemberRole(userId: string, workspaceId: string): Promise<string | null> {
+  const member = await verifyWorkspaceAccess(userId, workspaceId);
+  return member?.role ?? null;
 }
 
 /**
@@ -133,9 +159,16 @@ export async function getBoardVisibilityFilter(
   workspaceId: string,
   role: string
 ): Promise<SQL | undefined> {
-  const own = eq(kanbanBoards.createdById, userId);
+  const addedRows = await db
+    .select({ id: boardMembers.boardId })
+    .from(boardMembers)
+    .where(eq(boardMembers.userId, userId));
+  const addedBoardIds = addedRows.map((r) => r.id);
+  const own = addedBoardIds.length > 0
+    ? or(eq(kanbanBoards.createdById, userId), inArray(kanbanBoards.id, addedBoardIds))
+    : eq(kanbanBoards.createdById, userId);
 
-  if (role === "owner" || role === "admin") {
+  if (isAdminRole(role)) {
     return or(own, eq(kanbanBoards.isPersonal, false));
   }
 

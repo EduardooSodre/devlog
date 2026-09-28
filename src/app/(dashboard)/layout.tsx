@@ -6,6 +6,7 @@ import { users } from "@/lib/db/schema";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { OnboardingWizard } from "@/components/layout/OnboardingWizard";
 import { getUserWorkspaces, getActiveWorkspaceId, getWorkspaceUsage } from "@/lib/workspace";
+import { acceptPendingInvitesForUser } from "@/lib/invites";
 
 export default async function DashboardLayout({
   children,
@@ -14,6 +15,10 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
   if (!session) redirect("/login");
+
+  // Convite pendente pro e-mail de quem entrou (com identidade verificada) é aceito
+  // aqui mesmo, sem a pessoa precisar achar o e-mail e clicar no link.
+  await acceptPendingInvitesForUser(session.user.id);
 
   const memberships = await getUserWorkspaces(session.user.id);
   const activeId = await getActiveWorkspaceId(session.user.id);
@@ -42,7 +47,11 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar workspaces={workspaces} activeWorkspaceId={activeWorkspaceId} />
+      <Sidebar
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        isBillingOwner={activeMembership?.role === "owner"}
+      />
       <main className="flex-1 overflow-y-auto">{children}</main>
       {dbUser?.hasOnboarded === false && (
         <OnboardingWizard

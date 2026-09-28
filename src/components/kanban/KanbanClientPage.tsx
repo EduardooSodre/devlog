@@ -10,6 +10,7 @@ import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/li
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
 import { BoardAccessPanel } from "./BoardAccessPanel";
+import { canManageBoard, canWorkOnCard } from "@/lib/permissions";
 import { DueDateAlerts } from "./DueDateAlerts";
 import { BoardCanvas } from "./BoardCanvas";
 import { ListView } from "./ListView";
@@ -36,9 +37,10 @@ interface Props {
   initialBoards: KanbanBoardWithColumns[];
   workspaceId: string;
   otherWorkspaces?: { id: string; name: string }[];
+  currentUserRole?: string;
 }
 
-export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces = [] }: Props) {
+export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces = [], currentUserRole = "member" }: Props) {
   const [boards, setBoards] = useState<KanbanBoardWithColumns[]>(initialBoards);
   const [activeBoard, setActiveBoard] = useState<KanbanBoardWithColumns | null>(
     initialBoards[0] ?? null
@@ -75,6 +77,10 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
   const isDraggingRef = useRef(false);
+  // Mesmas regras do servidor (lib/permissions) — aqui só pra esconder o que a pessoa
+  // não pode fazer, em vez de deixar clicar e tomar erro.
+  const canManageActiveBoard = !!activeBoard && !!currentUserId && canManageBoard(currentUserId, activeBoard, currentUserRole);
+  const canWorkOn = (card: KanbanCardWithDetails) => !!currentUserId && canWorkOnCard(currentUserId, card, currentUserRole);
 
   // "Parece vivo" sem WebSocket: revalida os boards a cada 15s e substitui os dados,
   // preservando a seleção. ponytail: real-time de verdade (WebSocket/Pusher/Ably) pede
@@ -616,7 +622,7 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Configurações</p>
                   </div>
 
-                  {editingBoard ? (
+                  {!canManageActiveBoard ? null : editingBoard ? (
                     <div className="p-2 space-y-3">
                       <input
                         autoFocus
@@ -668,31 +674,39 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                     </button>
                   )}
 
-                  <div className="my-1 border-t border-border" />
+                  {canManageActiveBoard && <div className="my-1 border-t border-border" />}
 
                   <BoardAccessPanel
-                    workspaceId={workspaceId}
+                    key={activeBoard.id}
+                    boardId={activeBoard.id}
                     isPersonal={activeBoard.isPersonal}
                     departmentId={activeBoard.departmentId}
                     departments={departments}
+                    canManage={canManageActiveBoard}
                     onChangeVisibility={handleChangeBoardVisibility}
                   />
 
-                  <div className="my-1 border-t border-border" />
-
-                  <button
-                    onClick={handleArchiveBoard}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors"
-                  >
-                    <Archive className="w-4 h-4" /> Arquivar Board
-                  </button>
-
-                  <button
-                    onClick={handleDeleteBoard}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" /> Excluir Board
-                  </button>
+                  {canManageActiveBoard ? (
+                    <>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={handleArchiveBoard}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors"
+                      >
+                        <Archive className="w-4 h-4" /> Arquivar Board
+                      </button>
+                      <button
+                        onClick={handleDeleteBoard}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" /> Excluir Board
+                      </button>
+                    </>
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">
+                      Só quem criou este board ou um administrador pode editá-lo, arquivá-lo ou excluí-lo.
+                    </p>
+                  )}
                 </div>
               </>
             )}
@@ -795,10 +809,13 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                 onNewCardTitleChange={setNewCardTitle}
                 onCreateCard={() => handleCreateCard(column.id)}
                 loadingCard={loadingCard}
+                canManageColumns={canManageActiveBoard}
+                canDragCard={canWorkOn}
               />
             ))}
 
             {/* Add Column Button */}
+            {canManageActiveBoard && (
             <div className="w-72 shrink-0">
               {creatingColumn ? (
                 <div className="bg-card border border-primary/40 rounded-2xl p-4 shadow-lg">
@@ -838,6 +855,7 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                 </button>
               )}
             </div>
+            )}
           </div>
           </BoardCanvas>
         </DragDropContext>
@@ -850,6 +868,7 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
           workspaceId={workspaceId}
           allBoards={boards.map((b) => ({ id: b.id, name: b.name, color: b.color }))}
           otherWorkspaces={otherWorkspaces}
+          currentUserRole={currentUserRole}
           onClose={() => setSelectedCard(null)}
           onUpdate={handleCardUpdate}
           onDelete={handleCardDelete}
@@ -874,6 +893,8 @@ interface ColumnProps {
   onCreateCard: () => void;
   loadingCard: boolean;
   onDeleteColumn: () => void;
+  canManageColumns: boolean;
+  canDragCard: (card: KanbanCardWithDetails) => boolean;
 }
 
 function KanbanColumn({
@@ -887,6 +908,8 @@ function KanbanColumn({
   onCreateCard,
   loadingCard,
   onDeleteColumn,
+  canManageColumns,
+  canDragCard,
 }: ColumnProps) {
   const [showColumnActions, setShowColumnActions] = useState(false);
   const cards = column.cards ?? [];
@@ -914,6 +937,7 @@ function KanbanColumn({
           >
             <Plus className="w-4 h-4" />
           </button>
+          {canManageColumns && (
           <div className="relative">
             <button
               onClick={() => setShowColumnActions(!showColumnActions)}
@@ -941,6 +965,7 @@ function KanbanColumn({
               </>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -967,7 +992,7 @@ function KanbanColumn({
             )}
           >
             {cards.map((card, index) => (
-              <Draggable key={card.id} draggableId={card.id} index={index}>
+              <Draggable key={card.id} draggableId={card.id} index={index} isDragDisabled={!canDragCard(card)}>
                 {(drag, snap) => {
                   const cardEl = (
                     <div

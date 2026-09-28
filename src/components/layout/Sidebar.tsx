@@ -28,7 +28,7 @@ const navItems = [
   { label: "Documentação", href: "/docs", icon: FileText },
 ];
 
-const bottomItems = [
+const allBottomItems = [
   { label: "Configurações", href: "/settings", icon: Settings },
   { label: "Plano & Billing", href: "/settings/billing", icon: CreditCard },
 ];
@@ -36,9 +36,12 @@ const bottomItems = [
 interface SidebarProps {
   workspaces?: WorkspaceOption[];
   activeWorkspaceId?: string;
+  /** Só o dono do workspace (quem paga) vê a área de pagamentos. */
+  isBillingOwner?: boolean;
 }
 
-export function Sidebar({ workspaces = [], activeWorkspaceId = "" }: SidebarProps) {
+export function Sidebar({ workspaces = [], activeWorkspaceId = "", isBillingOwner = false }: SidebarProps) {
+  const bottomItems = isBillingOwner ? allBottomItems : allBottomItems.filter((i) => i.href !== "/settings/billing");
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);

@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { kanbanBoards, kanbanColumns, departments, departmentMembers } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
-import { verifyWorkspaceAccess, getBoardVisibilityFilter, canAccessBoard } from "@/lib/workspace";
+import { verifyWorkspaceAccess, getBoardVisibilityFilter, canManageBoardAccess } from "@/lib/workspace";
 
 const createBoardSchema = z.object({
   name: z.string().min(1).max(100),
@@ -173,8 +173,8 @@ export async function PATCH(req: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: "Board não encontrado" }, { status: 404 });
     }
-    if (!(await canAccessBoard(session.user.id, existing))) {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    if (!(await canManageBoardAccess(session.user.id, existing))) {
+      return NextResponse.json({ error: "Só quem criou o board ou um administrador pode alterá-lo" }, { status: 403 });
     }
 
     // Trocar o departamento que restringe o board (ou liberar pro workspace todo com
@@ -235,8 +235,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Board não encontrado" }, { status: 404 });
     }
 
-    if (!(await canAccessBoard(session.user.id, board))) {
-      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+    if (!(await canManageBoardAccess(session.user.id, board))) {
+      return NextResponse.json({ error: "Só quem criou o board ou um administrador pode excluí-lo" }, { status: 403 });
     }
 
     await db.delete(kanbanBoards).where(eq(kanbanBoards.id, id));

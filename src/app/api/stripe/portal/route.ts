@@ -17,6 +17,9 @@ export async function POST() {
     if (!ctx) {
       return NextResponse.json({ error: "Workspace não encontrado" }, { status: 404 });
     }
+    if (ctx.membership.role !== "owner") {
+      return NextResponse.json({ error: "Só o responsável pelo workspace pode gerenciar o pagamento" }, { status: 403 });
+    }
 
     const sub = await db.query.subscriptions.findFirst({
       where: eq(subscriptions.workspaceId, ctx.workspace.id),

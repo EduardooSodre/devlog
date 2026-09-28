@@ -1,16 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { BookOpen, Github, User, Mail, Lock, Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Carregando…</div>}>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Vindo de um link de convite: e-mail já preenchido e, depois de criar a conta, volta
+  // pro convite (que se aceita sozinho). Só caminhos internos — evita redirect aberto.
+  const rawCallback = searchParams.get("callbackUrl");
+  const callbackUrl = rawCallback?.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/dashboard";
+  const invitedEmail = searchParams.get("email") ?? "";
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,7 +52,8 @@ export default function RegisterPage() {
 
       // Auto-login após registro
       await signIn("credentials", { email, password, redirect: false });
-      router.push("/dashboard");
+      router.push(callbackUrl);
+      router.refresh();
     } catch {
       toast.error("Erro ao criar conta. Tente novamente.");
     } finally {
@@ -63,7 +78,7 @@ export default function RegisterPage() {
 
         {/* OAuth */}
         <button
-          onClick={() => signIn("github", { callbackUrl: "/dashboard" })}
+          onClick={() => signIn("github", { callbackUrl })}
           className="w-full flex items-center justify-center gap-2 h-10 bg-card border border-border rounded-lg text-sm hover:border-primary/40 transition-colors mb-6"
         >
           <Github className="w-4 h-4" />
@@ -100,6 +115,7 @@ export default function RegisterPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                readOnly={!!invitedEmail}
                 placeholder="seu@email.com"
                 required
                 className="w-full h-10 bg-card border border-border rounded-lg pl-9 pr-4 text-sm focus:outline-none focus:border-primary transition-colors placeholder:text-muted-foreground/60"
@@ -146,7 +162,10 @@ export default function RegisterPage() {
 
         <p className="text-sm text-muted-foreground text-center mt-4">
           Já tem conta?{" "}
-          <Link href="/login" className="text-primary hover:underline">
+          <Link
+            href={callbackUrl === "/dashboard" ? "/login" : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+            className="text-primary hover:underline"
+          >
             Entrar
           </Link>
         </p>

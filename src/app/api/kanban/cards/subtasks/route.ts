@@ -10,9 +10,14 @@ import { db } from "@/lib/db";
 import { cardSubtasks, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { assertCardAccess } from "@/lib/workspace";
+import { assertCardAccess, canWorkOnCard, getMemberRole, type CardAccess } from "@/lib/workspace";
 import { notifyUser } from "@/lib/notify";
 import { logActivity } from "@/lib/activity";
+
+async function canWork(userId: string, access: CardAccess) {
+  const role = await getMemberRole(userId, access.board.workspaceId);
+  return canWorkOnCard(userId, access.card, role);
+}
 
 /** Mesmo motivo do `parseDateOnly` em cards/route.ts — fixa Brasília em vez da hora
  * local do processo, que em produção costuma ser UTC. */
@@ -56,8 +61,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  if (!(await assertCardAccess(session.user.id, parsed.data.cardId))) {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  const access = await assertCardAccess(session.user.id, parsed.data.cardId);
+  if (!access || !(await canWork(session.user.id, access))) {
+    return NextResponse.json({ error: "Só quem criou, o responsável ou um administrador pode mexer nas subtarefas" }, { status: 403 });
   }
 
   const [subtask] = await db.insert(cardSubtasks).values(parsed.data).returning();
@@ -84,6 +90,12 @@ export async function PATCH(req: NextRequest) {
   const access = await assertCardAccess(session.user.id, existing.cardId);
   if (!access) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+  // Quem recebeu uma subtarefa pode marcá-la como feita, mesmo sem poder mexer no resto.
+  const onlyTogglingOwnSubtask =
+    existing.assignedToId === session.user.id && Object.keys(parsed.data).every((k) => k === "id" || k === "isDone");
+  if (!onlyTogglingOwnSubtask && !(await canWork(session.user.id, access))) {
+    return NextResponse.json({ error: "Só quem criou, o responsável ou um administrador pode mexer nas subtarefas" }, { status: 403 });
   }
 
   const updateData: Partial<typeof cardSubtasks.$inferInsert> = { ...rest };
@@ -123,7 +135,8 @@ export async function DELETE(req: NextRequest) {
   if (!existing) {
     return NextResponse.json({ success: true }); // já removida
   }
-  if (!(await assertCardAccess(session.user.id, existing.cardId))) {
+  const access = await assertCardAccess(session.user.id, existing.cardId);
+  if (!access || !(await canWork(session.user.id, access))) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
 

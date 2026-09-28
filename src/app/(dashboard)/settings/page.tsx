@@ -1,10 +1,14 @@
 import { auth } from "@/lib/auth";
-import { Settings, User, CreditCard, Bell, Building2, AlertTriangle } from "lucide-react";
-import { getPlanConfig } from "@/lib/plans";
-import { getActiveWorkspace } from "@/lib/workspace";
+import { Settings, User, CreditCard, Bell, Building2, AlertTriangle, Users, Mail } from "lucide-react";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { getPlanConfig, PLANS } from "@/lib/plans";
+import { getActiveWorkspace, isAdminRole } from "@/lib/workspace";
 import { isTrialExpired } from "@/lib/org-domain";
 import { BillingActions } from "@/components/settings/BillingActions";
 import { WorkspaceInvitesForm } from "@/components/settings/WorkspaceInvitesForm";
+import { MembersForm } from "@/components/settings/MembersForm";
 import { cn, formatDate } from "@/lib/utils";
 import { WorkspaceSettingsForm } from "@/components/settings/WorkspaceSettingsForm";
 import { ProfileSettingsForm } from "@/components/settings/ProfileSettingsForm";
@@ -22,10 +26,17 @@ export default async function SettingsPage() {
 
   const ctx = await getActiveWorkspace(userId);
   const workspace = ctx?.workspace ?? null;
+  const role = ctx?.membership.role;
+  const isOwner = role === "owner";
+  const isAdmin = isAdminRole(role);
   const currentPlan = workspace?.plan ?? "free";
   const planConfig = getPlanConfig(currentPlan);
   const isOrgWorkspace = !!workspace?.domain;
   const trialExpired = workspace ? isTrialExpired(workspace) : false;
+  const owner = workspace && !isOwner
+    ? await db.query.users.findFirst({ where: eq(users.id, workspace.ownerId), columns: { name: true, email: true } })
+    : null;
+  const ownerName = owner?.name ?? owner?.email ?? "o responsável pelo workspace";
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
@@ -54,17 +65,21 @@ export default async function SettingsPage() {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {trialExpired
-                ? "Criar novos boards e convidar membros está bloqueado até assinar o plano Enterprise."
+                ? isOwner
+                  ? "Criar novos boards e convidar membros está bloqueado até assinar o plano Enterprise."
+                  : `Criar novos boards e convidar membros está bloqueado até ${ownerName} assinar o plano.`
                 : "Todo cadastro com o mesmo domínio de e-mail entra automaticamente neste workspace."}
             </p>
           </div>
-          <BillingActions
-            workspaceId={workspace.id}
-            isPro={false}
-            plan="enterprise"
-            variant="inline"
-            label="Assinar Enterprise"
-          />
+          {isOwner && (
+            <BillingActions
+              workspaceId={workspace.id}
+              isPro={false}
+              plan="enterprise"
+              variant="inline"
+              label="Assinar Enterprise"
+            />
+          )}
         </div>
       )}
 
@@ -100,6 +115,14 @@ export default async function SettingsPage() {
           <CreditCard className="w-4 h-4 text-primary" />
           <h2 className="font-semibold">Plano & Billing</h2>
         </div>
+        {!isOwner ? (
+          <div className="bg-card border border-border rounded-2xl p-5 text-sm text-muted-foreground">
+            Você faz parte do plano <strong className="text-foreground">{planConfig.name}</strong> de{" "}
+            <strong className="text-foreground">{workspace?.name}</strong>. Você não paga nada — a cobrança
+            {currentPlan === "enterprise" ? " (por pessoa)" : ""} é feita para {ownerName}, que é quem gerencia
+            o pagamento.
+          </div>
+        ) : (
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -140,13 +163,29 @@ export default async function SettingsPage() {
             ))}
           </div>
 
-          {currentPlan === "pro" && workspace && (
-            <div className="mt-4">
-              <BillingActions workspaceId={workspace.id} isPro plan="pro" />
-            </div>
-          )}
+          <a href="/settings/billing" className="inline-block mt-4 text-sm text-primary hover:underline">
+            Ver quanto pago, faturas e gerenciar pagamento →
+          </a>
         </div>
+        )}
       </section>
+
+      {workspace && (
+        <section className="mb-8" id="membros">
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-4 h-4 text-primary" />
+            <h2 className="font-semibold">Membros</h2>
+          </div>
+          <div className="bg-card border border-border rounded-2xl p-5">
+            <MembersForm
+              workspaceId={workspace.id}
+              currentUserId={userId}
+              canManage={isAdmin}
+              seatPrice={currentPlan === "enterprise" ? PLANS.enterprise.priceMonthly : undefined}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Notificações */}
       <section className="mb-8">
@@ -174,11 +213,11 @@ export default async function SettingsPage() {
       {workspace && (
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <Bell className="w-4 h-4 text-primary" />
+            <Mail className="w-4 h-4 text-primary" />
             <h2 className="font-semibold">Convites</h2>
           </div>
           <div className="bg-card border border-border rounded-2xl p-5">
-            <WorkspaceInvitesForm workspaceId={workspace.id} />
+            <WorkspaceInvitesForm workspaceId={workspace.id} canInviteAdmins={isAdmin} />
           </div>
         </section>
       )}

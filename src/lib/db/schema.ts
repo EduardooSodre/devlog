@@ -197,6 +197,8 @@ export const workspaceInvites = pgTable(
     // Convite pode ser só pro workspace, ou já direto pra um departamento específico —
     // nesse caso o aceite também insere em departmentMembers (ver /invites/accept).
     departmentId: text("department_id").references(() => departments.id, { onDelete: "cascade" }),
+    // Convite feito de dentro de um board: ao aceitar, a pessoa também vira membro dele.
+    boardId: text("board_id").references(() => kanbanBoards.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
     role: memberRoleEnum("role").notNull().default("member"),
     token: text("token").notNull().unique(),
@@ -323,6 +325,31 @@ export const kanbanBoards = pgTable("kanban_boards", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
 });
+
+// Pessoas adicionadas diretamente a um board — é o que permite compartilhar um board
+// privado com gente específica, ou incluir alguém de fora do departamento do board.
+export const boardMembers = pgTable(
+  "board_members",
+  {
+    boardId: text("board_id")
+      .notNull()
+      .references(() => kanbanBoards.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addedById: text("added_by_id").references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.boardId, table.userId] }),
+    userIdx: index("board_members_user_idx").on(table.userId),
+  })
+);
+
+export const boardMembersRelations = relations(boardMembers, ({ one }) => ({
+  board: one(kanbanBoards, { fields: [boardMembers.boardId], references: [kanbanBoards.id] }),
+  user: one(users, { fields: [boardMembers.userId], references: [users.id] }),
+}));
 
 export const kanbanColumns = pgTable("kanban_columns", {
   id: text("id")
@@ -698,6 +725,7 @@ export const kanbanBoardsRelations = relations(kanbanBoards, ({ one, many }) => 
   }),
   columns: many(kanbanColumns),
   cards: many(kanbanCards),
+  members: many(boardMembers),
 }));
 
 export const kanbanColumnsRelations = relations(kanbanColumns, ({ one, many }) => ({

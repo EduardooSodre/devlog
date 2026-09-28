@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { docEntries, workspaceMembers, entryTags } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
+import { isAdminRole } from "@/lib/permissions";
 
 const createDocSchema = z.object({
   title: z.string().min(1).max(200),
@@ -21,7 +22,19 @@ const createDocSchema = z.object({
   relatedCardId: z.string().optional(),
 });
 
-const updateDocSchema = createDocSchema.partial().extend({ id: z.string() });
+// workspaceId fica de fora: editar uma doc nunca deve poder movê-la pra outro workspace.
+const updateDocSchema = createDocSchema.omit({ workspaceId: true }).partial().extend({ id: z.string() });
+
+/** Editar/excluir doc: o autor, ou owner/admin do workspace da doc. */
+async function canManageDoc(userId: string, docId: string): Promise<boolean> {
+  const doc = await db.query.docEntries.findFirst({ where: eq(docEntries.id, docId) });
+  if (!doc) return false;
+  if (doc.authorId === userId) return true;
+  const member = await db.query.workspaceMembers.findFirst({
+    where: and(eq(workspaceMembers.workspaceId, doc.workspaceId), eq(workspaceMembers.userId, userId)),
+  });
+  return isAdminRole(member?.role);
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -155,15 +168,15 @@ export async function PATCH(req: NextRequest) {
 
     const { id, ...updates } = parsed.data;
 
+    if (!(await canManageDoc(session.user.id, id))) {
+      return NextResponse.json({ error: "Doc não encontrada ou sem permissão" }, { status: 404 });
+    }
+
     const [updated] = await db
       .update(docEntries)
       .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(docEntries.id, id), eq(docEntries.authorId, session.user.id)))
+      .where(eq(docEntries.id, id))
       .returning();
-
-    if (!updated) {
-      return NextResponse.json({ error: "Doc não encontrada ou sem permissão" }, { status: 404 });
-    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -184,9 +197,11 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
     }
 
-    await db
-      .delete(docEntries)
-      .where(and(eq(docEntries.id, docId), eq(docEntries.authorId, session.user.id)));
+    if (!(await canManageDoc(session.user.id, docId))) {
+      return NextResponse.json({ error: "Só o autor ou um administrador pode excluir" }, { status: 403 });
+    }
+
+    await db.delete(docEntries).where(eq(docEntries.id, docId));
 
     return NextResponse.json({ success: true });
   } catch (error) {

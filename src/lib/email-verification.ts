@@ -62,8 +62,8 @@ async function upgradeWorkspaceIfCorporate(userId: string, email: string): Promi
   if (existing) {
     if (!(await verifyWorkspaceAccess(userId, existing.id))) {
       await db.insert(workspaceMembers).values({ workspaceId: existing.id, userId, role: "member" });
-      const { syncSeatQuantity } = await import("@/lib/stripe");
-      await syncSeatQuantity(existing.id);
+      const { onMemberJoined } = await import("@/lib/members");
+      await onMemberJoined(existing.id, userId);
     }
     return;
   }
@@ -99,6 +99,9 @@ export async function verifyEmailToken(token: string): Promise<VerifyEmailResult
   await db.update(users).set({ emailVerified: new Date() }).where(eq(users.id, user.id));
   await db.delete(verificationTokens).where(eq(verificationTokens.token, token));
   await upgradeWorkspaceIfCorporate(user.id, user.email);
+  // E-mail agora provado — convites pendentes pra ele entram sozinhos.
+  const { acceptPendingInvitesForUser } = await import("@/lib/invites");
+  await acceptPendingInvitesForUser(user.id);
 
   return { ok: true };
 }

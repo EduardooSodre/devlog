@@ -65,9 +65,9 @@ export async function resolveSignupWorkspace(
         userId,
         role: "member",
       });
-      // Cobrança por assento (R$30/funcionário) acompanha o time automaticamente.
-      const { syncSeatQuantity } = await import("@/lib/stripe");
-      await syncSeatQuantity(existing.id);
+      // Cobrança por assento (R$30/funcionário) + aviso ao dono, automático.
+      const { onMemberJoined } = await import("@/lib/members");
+      await onMemberJoined(existing.id, userId);
       return { workspace: existing, joinedExisting: true };
     }
 

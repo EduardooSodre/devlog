@@ -24,7 +24,10 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+  // Só caminhos internos — um callbackUrl externo viraria redirecionamento aberto pra
+  // qualquer site (phishing com link "legítimo" do DevLog).
+  const rawCallback = searchParams.get("callbackUrl");
+  const callbackUrl = rawCallback?.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -206,7 +209,10 @@ function LoginForm() {
 
           <p className="text-sm text-muted-foreground text-center mt-6">
             Não tem conta?{" "}
-            <Link href="/register" className="text-primary hover:underline">
+            <Link
+              href={callbackUrl === "/dashboard" ? "/register" : `/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+              className="text-primary hover:underline"
+            >
               Criar conta grátis
             </Link>
           </p>

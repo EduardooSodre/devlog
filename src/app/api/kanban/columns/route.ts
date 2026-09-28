@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { kanbanColumns, kanbanBoards } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { canAccessBoard } from "@/lib/workspace";
+import { canManageBoardAccess } from "@/lib/workspace";
 
 const createColumnSchema = z.object({
   name: z.string().min(1).max(50),
@@ -20,10 +20,12 @@ const createColumnSchema = z.object({
   color: z.string().optional(),
 });
 
+/** Colunas são a estrutura do board — criar/renomear/excluir segue a regra de gerenciar
+ * o board (criador ou owner/admin), não só "ter acesso" a ele. */
 async function assertBoardAccess(userId: string, boardId: string) {
   const board = await db.query.kanbanBoards.findFirst({ where: eq(kanbanBoards.id, boardId) });
   if (!board) return false;
-  return canAccessBoard(userId, board);
+  return canManageBoardAccess(userId, board);
 }
 
 async function assertColumnAccess(userId: string, columnId: string) {

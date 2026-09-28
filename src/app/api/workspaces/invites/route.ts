@@ -1,12 +1,16 @@
+/**
+ * GET    /api/workspaces/invites?workspaceId=xxx — Convites pendentes (com link pra copiar).
+ * POST   /api/workspaces/invites — Convida (ou reenvia, se já havia convite pendente).
+ * DELETE /api/workspaces/invites?id=xxx — Cancela (quem convidou ou owner/admin).
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { workspaceInvites, workspaces, departments } from "@/lib/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
-import { getActiveWorkspace, verifyWorkspaceAccess, checkPlanLimit } from "@/lib/workspace";
-import { sendMail, escapeHtml } from "@/lib/mail";
+import { workspaceInvites, departments, users, workspaceMembers } from "@/lib/db/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
+import { getActiveWorkspace, verifyWorkspaceAccess, checkPlanLimit, isAdminRole } from "@/lib/workspace";
+import { createOrRefreshInvite, inviteUrlFor } from "@/lib/invites";
 import { z } from "zod";
-import { nanoid } from "nanoid";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -39,7 +43,10 @@ export async function GET(req: NextRequest) {
     orderBy: (i, { desc }) => [desc(i.createdAt)],
   });
 
-  return NextResponse.json({ success: true, data: invites });
+  return NextResponse.json({
+    success: true,
+    data: invites.map((i) => ({ ...i, inviteUrl: inviteUrlFor(i.token), expired: i.expiresAt < new Date() })),
+  });
 }
 
 export async function POST(req: Request) {
@@ -49,23 +56,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const parsed = inviteSchema.safeParse(body);
+    const parsed = inviteSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
 
     let wsId = parsed.data.workspaceId;
+    let role: string | undefined;
     if (wsId) {
       const member = await verifyWorkspaceAccess(session.user.id, wsId);
       if (!member) return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+      role = member.role;
     } else {
       const ctx = await getActiveWorkspace(session.user.id);
       wsId = ctx?.workspaceId;
+      role = ctx?.membership.role;
     }
 
     if (!wsId) {
       return NextResponse.json({ error: "Workspace não encontrado" }, { status: 404 });
+    }
+    // Só owner/admin pode convidar já como admin — senão um membro comum se "promoveria"
+    // por tabela convidando uma segunda conta sua como admin.
+    if (parsed.data.role === "admin" && !isAdminRole(role)) {
+      return NextResponse.json({ error: "Só administradores podem convidar outros administradores" }, { status: 403 });
+    }
+
+    const existingUser = await db.query.users.findFirst({
+      where: sql`lower(${users.email}) = ${parsed.data.email.toLowerCase()}`,
+    });
+    if (existingUser) {
+      const alreadyIn = await db.query.workspaceMembers.findFirst({
+        where: and(eq(workspaceMembers.workspaceId, wsId), eq(workspaceMembers.userId, existingUser.id)),
+      });
+      if (alreadyIn) {
+        return NextResponse.json({ error: "Essa pessoa já faz parte do workspace" }, { status: 409 });
+      }
     }
 
     const limit = await checkPlanLimit(wsId, "members");
@@ -73,64 +99,48 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: limit.message }, { status: 403 });
     }
 
-    let department: { id: string; name: string } | undefined;
     if (parsed.data.departmentId) {
       const dept = await db.query.departments.findFirst({ where: eq(departments.id, parsed.data.departmentId) });
       if (!dept || dept.workspaceId !== wsId) {
         return NextResponse.json({ error: "Departamento inválido" }, { status: 403 });
       }
-      department = dept;
     }
 
-    const token = nanoid(32);
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
-
-    const [invite] = await db
-      .insert(workspaceInvites)
-      .values({
-        workspaceId: wsId,
-        departmentId: parsed.data.departmentId,
-        email: parsed.data.email.toLowerCase(),
-        role: parsed.data.role,
-        token,
-        invitedById: session.user.id,
-        expiresAt,
-      })
-      .returning();
-
-    const baseUrl = process.env.APP_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-    const inviteUrl = `${baseUrl}/invite/${token}`;
-
-    const workspace = await db.query.workspaces.findFirst({ where: eq(workspaces.id, wsId) });
-    const inviterName = session.user.name ?? session.user.email ?? "Alguém";
-    const destination = department ? `${workspace?.name} · ${department.name}` : workspace?.name;
-    // inviterName e destination são texto livre (nome de exibição, nome de workspace/
-    // departamento) definido pelo próprio usuário — sem escapar, alguém poderia colocar
-    // markup/tags no nome e injetar HTML arbitrário no e-mail de quem for convidado.
-    const safeInviterName = escapeHtml(inviterName);
-    const safeDestination = escapeHtml(destination ?? "");
-    const emailSent = await sendMail({
-      to: invite.email,
-      subject: `${inviterName} te convidou para o ${destination} no DevLog`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-          <h2>Você foi convidado(a)!</h2>
-          <p><strong>${safeInviterName}</strong> te convidou para participar de <strong>${safeDestination}</strong> no DevLog.</p>
-          <p style="margin: 24px 0;">
-            <a href="${inviteUrl}" style="background:#4f6ef7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Aceitar convite</a>
-          </p>
-          <p style="color:#888;font-size:12px;">Este convite expira em 7 dias. Se você não esperava este e-mail, pode ignorá-lo.</p>
-        </div>
-      `,
+    const { invite, inviteUrl, emailSent } = await createOrRefreshInvite({
+      workspaceId: wsId,
+      email: parsed.data.email,
+      role: parsed.data.role,
+      departmentId: parsed.data.departmentId,
+      invitedById: session.user.id,
+      inviterName: session.user.name ?? session.user.email ?? "Alguém",
     });
 
-    return NextResponse.json(
-      { success: true, data: { ...invite, inviteUrl, emailSent } },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, data: { ...invite, inviteUrl, emailSent } }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/workspaces/invites]", error);
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user.id) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+  }
+
+  const invite = await db.query.workspaceInvites.findFirst({ where: eq(workspaceInvites.id, id) });
+  if (!invite) return NextResponse.json({ success: true });
+
+  const member = await verifyWorkspaceAccess(session.user.id, invite.workspaceId);
+  if (!member || (invite.invitedById !== session.user.id && !isAdminRole(member.role))) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  await db.delete(workspaceInvites).where(eq(workspaceInvites.id, id));
+  return NextResponse.json({ success: true });
 }

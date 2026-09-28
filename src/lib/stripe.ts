@@ -128,6 +128,58 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
   }
 }
 
+export type InvoiceSummary = {
+  id: string;
+  number: string | null;
+  createdAt: Date;
+  amount: number; // em reais
+  status: string | null;
+  pdfUrl: string | null;
+  hostedUrl: string | null;
+};
+
+/**
+ * Faturas já emitidas + a próxima cobrança prevista, pra área de pagamentos mostrar
+ * "quanto vou pagar" e os PDFs pra quem fatura o pagamento na empresa. Retorna vazio
+ * (sem quebrar a página) se o Stripe não estiver configurado ou der erro.
+ */
+export async function getBillingOverview(customerId: string): Promise<{
+  invoices: InvoiceSummary[];
+  upcoming: { amount: number; date: Date | null } | null;
+}> {
+  if (!process.env.STRIPE_SECRET_KEY) return { invoices: [], upcoming: null };
+  const stripe = getStripe();
+
+  let invoices: InvoiceSummary[] = [];
+  try {
+    const list = await stripe.invoices.list({ customer: customerId, limit: 24 });
+    invoices = list.data.map((inv) => ({
+      id: inv.id,
+      number: inv.number,
+      createdAt: new Date(inv.created * 1000),
+      amount: inv.total / 100,
+      status: inv.status,
+      pdfUrl: inv.invoice_pdf ?? null,
+      hostedUrl: inv.hosted_invoice_url ?? null,
+    }));
+  } catch (error) {
+    console.error("[getBillingOverview] invoices", error);
+  }
+
+  let upcoming: { amount: number; date: Date | null } | null = null;
+  try {
+    const next = await stripe.invoices.retrieveUpcoming({ customer: customerId });
+    upcoming = {
+      amount: next.total / 100,
+      date: next.next_payment_attempt ? new Date(next.next_payment_attempt * 1000) : null,
+    };
+  } catch {
+    // Sem assinatura ativa não existe "próxima fatura" — normal, não é erro.
+  }
+
+  return { invoices, upcoming };
+}
+
 export async function createBillingPortalSession(customerId: string, returnUrl: string) {
   const stripe = getStripe();
   return stripe.billingPortal.sessions.create({
