@@ -9,11 +9,13 @@ import {
   LayoutDashboard,
   Kanban,
   FileText,
+  FileBarChart2,
   Settings,
   ChevronLeft,
   Plus,
   User,
   CreditCard,
+  ShieldCheck,
 } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
 import { WorkspaceSwitcher, type WorkspaceOption } from "@/components/layout/WorkspaceSwitcher";
@@ -26,6 +28,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Projetos", href: "/projetos", icon: Kanban },
   { label: "Documentação", href: "/docs", icon: FileText },
+  { label: "Relatórios", href: "/relatorios", icon: FileBarChart2 },
 ];
 
 const allBottomItems = [
@@ -38,9 +41,11 @@ interface SidebarProps {
   activeWorkspaceId?: string;
   /** Só o dono do workspace (quem paga) vê a área de pagamentos. */
   isBillingOwner?: boolean;
+  /** Só o e-mail configurado em SUPER_ADMIN_EMAILS vê o painel /admin. */
+  isSuperAdmin?: boolean;
 }
 
-export function Sidebar({ workspaces = [], activeWorkspaceId = "", isBillingOwner = false }: SidebarProps) {
+export function Sidebar({ workspaces = [], activeWorkspaceId = "", isBillingOwner = false, isSuperAdmin = false }: SidebarProps) {
   const bottomItems = isBillingOwner ? allBottomItems : allBottomItems.filter((i) => i.href !== "/settings/billing");
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -207,6 +212,21 @@ export function Sidebar({ workspaces = [], activeWorkspaceId = "", isBillingOwne
             </Link>
           );
         })}
+
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            title="Super Admin"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-amber-500 hover:bg-amber-500/10",
+              collapsed && "flex-col gap-1 px-0 py-2.5 text-center"
+            )}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="truncate">Super Admin</span>}
+            {collapsed && <span className="w-full text-[10px] font-medium leading-tight">Admin</span>}
+          </Link>
+        )}
 
         {/* User */}
         <button

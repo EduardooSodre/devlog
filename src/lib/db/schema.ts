@@ -19,6 +19,7 @@ import {
   pgEnum,
   primaryKey,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -656,6 +657,45 @@ export const cardTags = pgTable(
     pk: primaryKey({ columns: [table.cardId, table.tagId] }),
   })
 );
+
+// ─────────────────────────────────────────────
+// RELATÓRIOS — uso de IA e configuração do sistema
+// ─────────────────────────────────────────────
+
+// Uma linha por geração de relatório com IA. O limite diário é checado via
+// INSERT...ON CONFLICT DO NOTHING num slot (0..limite-1): a constraint única do
+// Postgres garante atomicidade sem depender de transação multi-statement (o driver
+// neon-http não suporta bem). Ver src/lib/ai-report-limit.ts.
+export const aiReportUsage = pgTable(
+  "ai_report_usage",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    usedOn: text("used_on").notNull(), // "YYYY-MM-DD" em Brasília
+    slot: integer("slot").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userDaySlotUnique: uniqueIndex("ai_usage_user_day_slot_idx").on(table.userId, table.usedOn, table.slot),
+    usedOnIdx: index("ai_usage_used_on_idx").on(table.usedOn),
+  })
+);
+
+// Configuração ajustável em runtime pelo super admin (ex: limite diário de
+// relatórios com IA), sem precisar de deploy pra mudar um número.
+export const systemSettings = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
+  updatedByEmail: text("updated_by_email"),
+});
 
 // ─────────────────────────────────────────────
 // RELATIONS

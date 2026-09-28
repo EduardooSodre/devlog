@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { OnboardingWizard } from "@/components/layout/OnboardingWizard";
 import { getUserWorkspaces, getActiveWorkspaceId, getWorkspaceUsage } from "@/lib/workspace";
 import { acceptPendingInvitesForUser } from "@/lib/invites";
+import { isSuperAdmin } from "@/lib/super-admin";
 
 export default async function DashboardLayout({
   children,
@@ -51,6 +52,7 @@ export default async function DashboardLayout({
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         isBillingOwner={activeMembership?.role === "owner"}
+        isSuperAdmin={isSuperAdmin(session.user.email)}
       />
       <main className="flex-1 overflow-y-auto">{children}</main>
       {dbUser?.hasOnboarded === false && (
