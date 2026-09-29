@@ -35,6 +35,8 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 export function formatDateOnly(date: Date | string): string {
+  // "YYYY-MM-DD" já é uma data de calendário: converter via Date (UTC) recuaria um dia em Brasília.
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) return `${date.slice(8)}/${date.slice(5, 7)}/${date.slice(0, 4)}`;
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 }
