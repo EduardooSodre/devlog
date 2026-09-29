@@ -1,0 +1,1442 @@
+[
+ {
+  "sha": "5de91326c3e59f679f9a7dd55be33692c0ac542e",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T17:10:36Z",
+  "message": "feat: adicionar dashboards administrativos, auditoria, relatórios e biblioteca de gráficos",
+  "add": 15113,
+  "del": 602,
+  "files": 113
+ },
+ {
+  "sha": "aae92ad8c4b3b898a30290d0612172a39ecc927b",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T17:11:26Z",
+  "message": "feat: adicionar dashboards administrativos, auditoria, relatórios e biblioteca de gráficos",
+  "add": 468,
+  "del": 83,
+  "files": 12
+ },
+ {
+  "sha": "3522c765a7db57773b7fb778398962a8ce9b6fe5",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T18:32:41Z",
+  "message": "feat: travar nivel Admin/Master pra usuarios fora do dominio da organizacao",
+  "add": 37,
+  "del": 3,
+  "files": 3
+ },
+ {
+  "sha": "406b5846c747647fb10afee5006647fa15721ff5",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T18:47:24Z",
+  "message": "feat: adicionar dropdown de mes/ano rapido no calendario de vencimento",
+  "add": 10,
+  "del": 0,
+  "files": 1
+ },
+ {
+  "sha": "867a6b63de88a58bfdb79602c9259da59ce25663",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T19:08:28Z",
+  "message": "style: aumentar foto da obra no cabecalho do dashboard",
+  "add": 3,
+  "del": 3,
+  "files": 1
+ },
+ {
+  "sha": "8fa1a82204f30b1ba4e783167780e31fe0d42c4f",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T19:12:07Z",
+  "message": "fix: atualização do favicon e logo",
+  "add": 54,
+  "del": 3,
+  "files": 5
+ },
+ {
+  "sha": "bf42e31b6e364686126c22f7d1c3a0f396aa00d5",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T19:57:42Z",
+  "message": "refactor: mover conteudo de frontend/ pra raiz do repositorio",
+  "add": 0,
+  "del": 49,
+  "files": 218
+ },
+ {
+  "sha": "99c9e39987575d1c5d42cea566b35345a4f884a7",
+  "repo": "Obralyse-main",
+  "date": "2026-09-01T21:14:28Z",
+  "message": "feat: adicionar logo e layout de ficha ao relatorio detalhado do colaborador",
+  "add": 136,
+  "del": 24,
+  "files": 5
+ },
+ {
+  "sha": "a86a64a1efa1d9f610452735f6a48ce8ae5c9ec7",
+  "repo": "Obralyse-main",
+  "date": "2026-09-02T15:05:19Z",
+  "message": "feat: adicionar filtro de período ao dashboard de auditoria",
+  "add": 143,
+  "del": 24,
+  "files": 9
+ },
+ {
+  "sha": "9fbfb68cecf389f3c3d94bc96d5a49e85d604a4e",
+  "repo": "rosh-main",
+  "date": "2026-09-03T12:28:48Z",
+  "message": "fix: troca de email autorizado a exclusão de notas",
+  "add": 2,
+  "del": 2,
+  "files": 1
+ },
+ {
+  "sha": "a8e87bb4ff06faba90bb441f7fbac50f63413ee2",
+  "repo": "checkObra-main",
+  "date": "2026-09-03T14:08:51Z",
+  "message": "Initial commit: CheckObra app com atribuicao remota de obra por dispositivo",
+  "add": 18735,
+  "del": 0,
+  "files": 92
+ },
+ {
+  "sha": "55cfe890def62fbf9935941a8b9d84d29740b83d",
+  "repo": "checkObra-main",
+  "date": "2026-09-03T18:24:30Z",
+  "message": "Suporta multiplas obras por dispositivo e refresh automatico de atribuicao",
+  "add": 109,
+  "del": 33,
+  "files": 5
+ },
+ {
+  "sha": "0e6a29a52773001b95ab320bebf7411589b6d000",
+  "repo": "checkObra-main",
+  "date": "2026-09-03T19:12:50Z",
+  "message": "Reduz intervalo de reconferencia de atribuicao para 20s",
+  "add": 6,
+  "del": 5,
+  "files": 1
+ },
+ {
+  "sha": "30cb8576724ffe94d7feaa439374de134745d2b7",
+  "repo": "checkObra-main",
+  "date": "2026-09-03T19:29:36Z",
+  "message": "Corrige upload de foto na sincronizacao e icone vazio na aba Pendencias",
+  "add": 7,
+  "del": 31,
+  "files": 2
+ },
+ {
+  "sha": "27c062c3f63d2c9f63dac2a2765a4e6f3827a4f2",
+  "repo": "Obralyse-main",
+  "date": "2026-09-03T19:41:19Z",
+  "message": "feat: integrar checkObra-main como fonte de checklists de equipamentos",
+  "add": 1024,
+  "del": 161,
+  "files": 26
+ },
+ {
+  "sha": "55fca72bd3d61d5a8ae610ad6ca07b4061ecf534",
+  "repo": "Obralyse-main",
+  "date": "2026-09-04T13:33:17Z",
+  "message": "fix: nao derrubar o app inteiro por falta de CHECKOBRA_API_KEY",
+  "add": 7,
+  "del": 1,
+  "files": 2
+ },
+ {
+  "sha": "3335228f8a182b01d20d6fb2d869b33b95e6efa7",
+  "repo": "Obralyse-main",
+  "date": "2026-09-04T14:17:27Z",
+  "message": "fix: derruba build inteiro por jose@6 ESM-only quebrando require() no jwks-rsa",
+  "add": 21,
+  "del": 9,
+  "files": 2
+ },
+ {
+  "sha": "a8033060e72057a3e3d263c7814bcd8374c823c9",
+  "repo": "Obralyse-main",
+  "date": "2026-09-04T15:16:46Z",
+  "message": "fix: logar motivo real de falha ao verificar hihub_session",
+  "add": 5,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "da33711795bcbf6a5750a5f732083310ef7182b0",
+  "repo": "Obralyse-main",
+  "date": "2026-09-04T18:22:44Z",
+  "message": "fix: tolerar formatos comuns de colagem errada de chave privada PEM",
+  "add": 13,
+  "del": 2,
+  "files": 1
+ },
+ {
+  "sha": "d5e4560f3aff793d2ecc585bea09a4562cb4f723",
+  "repo": "Obralyse-main",
+  "date": "2026-09-04T19:12:36Z",
+  "message": "fix: parar de checar revogacao de sessao (exige permissao que nao temos)",
+  "add": 6,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "9ad9a09a7315dbd2b6586a4eddb6952a1727b1fd",
+  "repo": "GED-main",
+  "date": "2026-09-08T13:32:39Z",
+  "message": "fix: aceita traço tipografico colado do Word e renomeia tipo FOR para F na nomenclatura",
+  "add": 64,
+  "del": 7,
+  "files": 5
+ },
+ {
+  "sha": "4738dcf7e63e41c14799155194c85b258560c87e",
+  "repo": "GED-main",
+  "date": "2026-09-08T18:09:53Z",
+  "message": "fix: escapa barra de pasta aninhada no ID do documento controlado no Firestore",
+  "add": 28,
+  "del": 3,
+  "files": 2
+ },
+ {
+  "sha": "b8164113f3ca73a6334e68ccfaa961abb1644877",
+  "repo": "Obralyse-main",
+  "date": "2026-09-08T19:00:12Z",
+  "message": "feat: vincular responsavel a dispositivos CheckObra, ativar/desativar obras, login por codigo e auditoria por modulo",
+  "add": 910,
+  "del": 99,
+  "files": 30
+ },
+ {
+  "sha": "b475e1efcd498430673dd392673f5171eb73e087",
+  "repo": "checkObra-main",
+  "date": "2026-09-08T19:01:23Z",
+  "message": "feat: login real por e-mail + codigo, substitui o mock local",
+  "add": 250,
+  "del": 98,
+  "files": 9
+ },
+ {
+  "sha": "49ab574fec1e5896d8d2614051f60e1c80f5d7f3",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T12:22:57Z",
+  "message": "feat: atualizacao instantanea do dispositivo via Firestore realtime, sem polling",
+  "add": 981,
+  "del": 51,
+  "files": 5
+ },
+ {
+  "sha": "303ef39e39ee907651c6482a299af96595e06a71",
+  "repo": "Obralyse-main",
+  "date": "2026-09-09T12:23:28Z",
+  "message": "feat: emitir custom token do Firebase pro dispositivo CheckObra ler o proprio doc em tempo real",
+  "add": 106,
+  "del": 8,
+  "files": 4
+ },
+ {
+  "sha": "5d490c8175aa824f16847040d5c5e4cf25a32e3b",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T12:29:24Z",
+  "message": "fix: descartar sessao antiga (mock) presa no SecureStore apos atualizar o app",
+  "add": 14,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "0d27d566ade5373096790d90ba3e5858be6d91ef",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T12:42:48Z",
+  "message": "feat: historico filtrado pela obra do tablet (accordion se tiver mais de uma) + admin com diagnostico",
+  "add": 166,
+  "del": 35,
+  "files": 3
+ },
+ {
+  "sha": "b0c9be5be1a3aa0ff4dc242b094ebca307ca6e93",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T12:56:22Z",
+  "message": "refactor: tirar lista de modelos de checklist da area Admin do app",
+  "add": 7,
+  "del": 25,
+  "files": 2
+ },
+ {
+  "sha": "562013f6167b9f8fa41b11dce4e3bf1614078793",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T13:17:27Z",
+  "message": "fix: loading infinito no login -- forcar long-polling no Firestore (React Native)",
+  "add": 15,
+  "del": 3,
+  "files": 1
+ },
+ {
+  "sha": "8531b9fc9e9c602f9e38ba62733e2f0d462c4d5f",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T13:30:55Z",
+  "message": "feat: autocomplete no equipamento, lider/encarregado e responsavel da Seguranca do Trabalho",
+  "add": 81,
+  "del": 5,
+  "files": 3
+ },
+ {
+  "sha": "ef78f7f441e8d3b12d5060539f41f6b1e8f1bfbc",
+  "repo": "Obralyse-main",
+  "date": "2026-09-09T13:39:03Z",
+  "message": "feat: endpoint de nomes de Usuarios pro autocomplete de lider/seguranca no CheckObra",
+  "add": 22,
+  "del": 0,
+  "files": 1
+ },
+ {
+  "sha": "5301cefb8f1873aa94fa0a42ed52d23a9abd8c20",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T13:39:34Z",
+  "message": "feat: sugerir lider/seguranca a partir de Usuarios cadastrados, nao do historico local",
+  "add": 52,
+  "del": 7,
+  "files": 3
+ },
+ {
+  "sha": "62b8c82589f02e7169614caeda1be91c201167f8",
+  "repo": "checkObra-main",
+  "date": "2026-09-09T13:53:48Z",
+  "message": "fix: key duplicada no autocomplete e sessao do Firebase Auth sem persistencia",
+  "add": 21,
+  "del": 4,
+  "files": 2
+ },
+ {
+  "sha": "3caf08c13e27938596eb7135d8f11b0cb9c8c3ae",
+  "repo": "rosh-main",
+  "date": "2026-09-09T20:45:26Z",
+  "message": "feat: linkifica URLs no conteúdo das publicações",
+  "add": 141,
+  "del": 19,
+  "files": 8
+ },
+ {
+  "sha": "af53b4b11be637b2190eddfee1b915b2aac9b002",
+  "repo": "rosh-main",
+  "date": "2026-09-10T11:38:13Z",
+  "message": "fix: ajusta corte de texto no feed conforme altura da imagem",
+  "add": 6,
+  "del": 2,
+  "files": 2
+ },
+ {
+  "sha": "6184baffdd3e1a9e79f1b2c163d2152b9d676dcd",
+  "repo": "rosh-main",
+  "date": "2026-09-10T11:52:23Z",
+  "message": "feat: drag-and-drop no upload de imagens e carrossel no card do feed",
+  "add": 94,
+  "del": 11,
+  "files": 3
+ },
+ {
+  "sha": "c117c02abf8815b6f85e4bd075c3bc6c435787be",
+  "repo": "rosh-main",
+  "date": "2026-09-10T11:55:10Z",
+  "message": "feat: leva o carrossel de imagens para o modo Feed também",
+  "add": 64,
+  "del": 11,
+  "files": 2
+ },
+ {
+  "sha": "e16a88e45b33d53688a162131d8b6a904ff3838d",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-10T20:17:47Z",
+  "message": "Feat - Solicitação de Adiantamento (Financeiro) + auditoria",
+  "add": 674,
+  "del": 16,
+  "files": 10
+ },
+ {
+  "sha": "12b25f1daccb52ee4fc1d13d0943a19ab597dc31",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T13:25:19Z",
+  "message": "fix: validar path e impedir apagar historico em accessControl_Registros",
+  "add": 26,
+  "del": 4,
+  "files": 1
+ },
+ {
+  "sha": "6b602434653a7e2a207122289f5c75456828cab6",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T13:25:42Z",
+  "message": "feat: modal de foto ampliada no detalhe do checklist",
+  "add": 78,
+  "del": 4,
+  "files": 3
+ },
+ {
+  "sha": "5e5894d627327e55f319c6220942af3fbbff103f",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T13:26:07Z",
+  "message": "test: setup do Vitest com testes de auth/token do CheckObra",
+  "add": 2880,
+  "del": 1206,
+  "files": 7
+ },
+ {
+  "sha": "df4762afc7f3747efd27806b92ff231c26eaa7ed",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T17:58:22Z",
+  "message": "feat: ocultar bloqueados por padrao e paginar lista de colaboradores",
+  "add": 103,
+  "del": 7,
+  "files": 2
+ },
+ {
+  "sha": "84d267457a477eab90adba1c3dcfad4af621c0c1",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T18:07:36Z",
+  "message": "perf: cachear listPessoas para reduzir leituras do Firestore",
+  "add": 26,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "b1f2dadf4388c042421464a289c7baac62d2dc9c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-11T19:05:51Z",
+  "message": "fix: liberar \"Todos os Ativos\" para todas as obras e corrigir corte de 400",
+  "add": 138,
+  "del": 1,
+  "files": 2
+ },
+ {
+  "sha": "9e3b91d4633150413f7ce33ceec3aa6740b9d9c9",
+  "repo": "Obralyse-main",
+  "date": "2026-09-14T13:55:42Z",
+  "message": "feat: refatorar sistema de permissoes e RBAC (niveis-acesso, dispositivos, recursos)",
+  "add": 3973,
+  "del": 228,
+  "files": 103
+ },
+ {
+  "sha": "904cd39939b11aa4c967965054b518cf42b37a18",
+  "repo": "Obralyse-main",
+  "date": "2026-09-14T14:05:05Z",
+  "message": "fix: exigir admin nas server actions de dispositivos e usuarios",
+  "add": 10,
+  "del": 12,
+  "files": 2
+ },
+ {
+  "sha": "e00f6ca058a5392b24997b1c403ccf4089874cfc",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T16:04:00Z",
+  "message": "feat: assinatura ICP-Brasil compatível com o validador do ITI e restrita por permissão",
+  "add": 260512,
+  "del": 100,
+  "files": 300
+ },
+ {
+  "sha": "77fcbedfe1886441f3a8bf068e4ed60a454f8d22",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T18:53:42Z",
+  "message": "fix: assinatura ICP-Brasil reprovada pelo validador do ITI",
+  "add": 757,
+  "del": 1009,
+  "files": 15
+ },
+ {
+  "sha": "a20ee4605ffca87455175d4e20f1c0792affe7d7",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T18:56:03Z",
+  "message": "chore: remove pasta scratch do versionamento",
+  "add": 3,
+  "del": 259646,
+  "files": 300
+ },
+ {
+  "sha": "67223c9fe385ebde927dfb93e0adf5c12122d699",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T19:01:51Z",
+  "message": "fix: erro real do Web PKI deixa de ser engolido e suporta licença",
+  "add": 51,
+  "del": 12,
+  "files": 1
+ },
+ {
+  "sha": "d35b3d4f57614105d6d27d1426f4b064534dd88f",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T19:21:08Z",
+  "message": "feat: assinatura ICP-Brasil com certificado A1 direto no navegador",
+  "add": 526,
+  "del": 3,
+  "files": 5
+ },
+ {
+  "sha": "8e91408f2f43dd343274d18091d676dbb5f94213",
+  "repo": "RoshSign-main",
+  "date": "2026-09-14T20:22:42Z",
+  "message": "fix: alinha assinatura com amostra aprovada pelo validador do ITI",
+  "add": 20,
+  "del": 7,
+  "files": 3
+ },
+ {
+  "sha": "9d94c3399321819d447590aea2514b7ab9efacf1",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T01:51:25Z",
+  "message": "feat: certificado de conclusão na trilha de auditoria",
+  "add": 299,
+  "del": 2,
+  "files": 3
+ },
+ {
+  "sha": "ee0d61afce0f213dcf3cad02113b6a18adb4a276",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T04:14:54Z",
+  "message": "feat: vincula assinatura de cada signatario a um CNPJ",
+  "add": 229,
+  "del": 3,
+  "files": 7
+ },
+ {
+  "sha": "a8a27351c83fb68f5032ca2ddbec37da3ff6afd2",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T04:23:20Z",
+  "message": "feat: rubrica, adocao de assinatura e base legal no certificado",
+  "add": 124,
+  "del": 13,
+  "files": 4
+ },
+ {
+  "sha": "6c86e5a88811507533404d79513a3536ae3381b2",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T11:34:55Z",
+  "message": "fix: download nunca mais entrega PDF \"digital\" sem assinatura",
+  "add": 187,
+  "del": 5,
+  "files": 3
+ },
+ {
+  "sha": "4d7d59d01a0c60d1fdfa82d2732fd21f212b39eb",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T11:42:26Z",
+  "message": "feat: diagnostico confere a ordem canonica dos signedAttrs",
+  "add": 47,
+  "del": 0,
+  "files": 1
+ },
+ {
+  "sha": "3a54c6c55ade836e2acf837d665e06a726cc68fb",
+  "repo": "RoshSign-main",
+  "date": "2026-09-15T12:00:08Z",
+  "message": "feat: varredura de pasta e correcoes no diagnostico de assinatura",
+  "add": 108,
+  "del": 7,
+  "files": 2
+ },
+ {
+  "sha": "cd66c4aefc82d8a3817b15617597b44c89d81743",
+  "repo": "Obralyse-main",
+  "date": "2026-09-15T16:31:45Z",
+  "message": "feat: portar fluxo de inspecoes e nao-conformidades do Inmeta pro Meio ambiente",
+  "add": 2512,
+  "del": 35,
+  "files": 32
+ },
+ {
+  "sha": "701383fa9b5081838a28a07048cfa29ebb4fdf56",
+  "repo": "Obralyse-main",
+  "date": "2026-09-15T18:48:08Z",
+  "message": "feat: generalizar motor de inspecoes pra materiais/servico/auditorias/entrega-obra",
+  "add": 834,
+  "del": 508,
+  "files": 67
+ },
+ {
+  "sha": "3ab813ac7383fb2d17dc383c2dd1946641223248",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T01:11:22Z",
+  "message": "feat: generalizar motor de inspecoes pra Seguranca (auditorias, treinamentos, registros, checklists de equipamentos)",
+  "add": 450,
+  "del": 227,
+  "files": 98
+ },
+ {
+  "sha": "d6868cbee864aac91772405d8bd5432e7f7a6138",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T10:54:59Z",
+  "message": "feat: adicionar entrega/devolucao de EPI com assinatura (seguranca/epis)",
+  "add": 694,
+  "del": 1,
+  "files": 17
+ },
+ {
+  "sha": "2277b3cbd0b8e74c20df4a80ecbe2379b9787839",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T15:09:54Z",
+  "message": "feat: aplicar workflow de validacao em etapas na execucao de inspecoes",
+  "add": 256,
+  "del": 5,
+  "files": 8
+ },
+ {
+  "sha": "44ac1290c01b75b825331a921f8009a0f844f05d",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T15:24:27Z",
+  "message": "feat: mostrar NC por submodulo de inspecao no hub global de indicadores",
+  "add": 36,
+  "del": 3,
+  "files": 3
+ },
+ {
+  "sha": "ec31b79cc240836d74e7a815311d11593d2f4451",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T15:54:39Z",
+  "message": "feat: fechar 3 lacunas do motor de inspecao (assinatura, selecao, tipo de NC)",
+  "add": 172,
+  "del": 34,
+  "files": 12
+ },
+ {
+  "sha": "128d6bf375cda8a78d96fdc96e03897a1d5d10b2",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T16:43:56Z",
+  "message": "feat: reprovacao no workflow de validacao, nivel de risco por item, e modulo Pre-obra",
+  "add": 252,
+  "del": 33,
+  "files": 19
+ },
+ {
+  "sha": "56cadd0cc0650fef67e9f33bc953d5f5884e6281",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T17:27:57Z",
+  "message": "feat: pagina de validacoes pendentes cruzando todos os submodulos",
+  "add": 130,
+  "del": 1,
+  "files": 8
+ },
+ {
+  "sha": "6b1c633a9c526778a9a7908f50b5a255f43543fc",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T17:43:36Z",
+  "message": "feat: exportar inspecao como PDF via impressao nativa do navegador",
+  "add": 60,
+  "del": 35,
+  "files": 4
+ },
+ {
+  "sha": "2a1044860b1d3711d52e86a3e3df1107e9edf945",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T17:54:14Z",
+  "message": "feat: adicionar NC por avaliador aos indicadores de inspecao",
+  "add": 6,
+  "del": 1,
+  "files": 2
+ },
+ {
+  "sha": "8e752c9375dec75ffc6fb7061fecbf1d80c5d693",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:06:02Z",
+  "message": "feat: envolvidos com CPF real em treinamentos",
+  "add": 96,
+  "del": 17,
+  "files": 4
+ },
+ {
+  "sha": "88ece2dd89d962ae064d1eec16ec2ac3d95086c5",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:13:30Z",
+  "message": "feat: local (texto livre) por inspecao dentro da obra",
+  "add": 25,
+  "del": 2,
+  "files": 6
+ },
+ {
+  "sha": "e59f9da37a8eee1717d17fd704208b0b2baafc2c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:21:34Z",
+  "message": "feat: iniciar varias inspecoes de uma vez, encadeadas",
+  "add": 104,
+  "del": 33,
+  "files": 4
+ },
+ {
+  "sha": "0e5a4c243e422bd075c72edcca469e7d6958f3b2",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:29:59Z",
+  "message": "feat: indicadores cruzando Qualidade e Seguranca numa visao so",
+  "add": 120,
+  "del": 1,
+  "files": 5
+ },
+ {
+  "sha": "27db33640829bd93e100ca935046bc08914efd65",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:42:49Z",
+  "message": "feat: editar inspecao finalizada com historico de alteracao",
+  "add": 340,
+  "del": 26,
+  "files": 8
+ },
+ {
+  "sha": "8cc4cef5589087d99982165b50ce186b06170588",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T18:55:52Z",
+  "message": "feat: RDO mais rico (clima por periodo, efetivo, atividades, equipamentos, visitas)",
+  "add": 487,
+  "del": 51,
+  "files": 8
+ },
+ {
+  "sha": "861358649b12647e451e9eb6552c2395202ce02d",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:16:28Z",
+  "message": "feat: permitir remover envolvido fixo do modelo em treinamentos",
+  "add": 7,
+  "del": 9,
+  "files": 1
+ },
+ {
+  "sha": "620057badcfbdea039e0745dded04a2bffa12d68",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:16:54Z",
+  "message": "feat: editar e excluir relatorio diario de obra (RDO)",
+  "add": 181,
+  "del": 25,
+  "files": 7
+ },
+ {
+  "sha": "5535ce22e183c364eec021dd765727dfcc41c665",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:17:26Z",
+  "message": "feat: agrupar indicadores cruzados por obra ou item, alem de submodulo",
+  "add": 96,
+  "del": 25,
+  "files": 5
+ },
+ {
+  "sha": "5718b18efb05ea997e99f5e7c20df73b806dfd4a",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:17:43Z",
+  "message": "feat: permitir editar item removido do modelo apos a inspecao",
+  "add": 77,
+  "del": 11,
+  "files": 2
+ },
+ {
+  "sha": "316e24fcfe98be2f0f4eeea5e0e3f4dc6f23905c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:18:11Z",
+  "message": "feat: catalogo de locais fisicos por obra",
+  "add": 244,
+  "del": 3,
+  "files": 9
+ },
+ {
+  "sha": "72be3502c0ab127b9e2c3c21432f068008ba0763",
+  "repo": "RoshSign-main",
+  "date": "2026-09-16T20:22:52Z",
+  "message": "feat: exige justificativa ao reprovar documento e notifica signatarios",
+  "add": 130,
+  "del": 17,
+  "files": 2
+ },
+ {
+  "sha": "13e536b940ec162fd74eb8e7ad9c594c8bcbfc06",
+  "repo": "Obralyse-main",
+  "date": "2026-09-16T20:32:27Z",
+  "message": "feat: workflow de validacao item a item na inspecao",
+  "add": 186,
+  "del": 5,
+  "files": 6
+ },
+ {
+  "sha": "b35b9c1ec3592dfa1f4a1065d94d2893d50c4611",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T01:31:50Z",
+  "message": "feat: cadastro mestre de fornecedor/equipamento/material/mao-de-obra",
+  "add": 225,
+  "del": 24,
+  "files": 11
+ },
+ {
+  "sha": "8799e348376334bc80df76340a98cc46abb50081",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T01:45:39Z",
+  "message": "feat: iniciar varias inspecoes juntas num formulario so",
+  "add": 308,
+  "del": 22,
+  "files": 6
+ },
+ {
+  "sha": "d80345de18fdd474e0803f67e8ed5aad2955e172",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T02:42:32Z",
+  "message": "fix: menu mobile (hamburguer) invisivel por contraste texto/fundo",
+  "add": 2,
+  "del": 2,
+  "files": 1
+ },
+ {
+  "sha": "c5402cfb7c7734d548094785448e9bb0c937841e",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T03:03:26Z",
+  "message": "feat: excluir item de cadastro mestre; corrige rotulo singular",
+  "add": 50,
+  "del": 7,
+  "files": 5
+ },
+ {
+  "sha": "09dd4832ff77b335c861d5e75fd283e54a6ce8ad",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T03:03:40Z",
+  "message": "feat: campo de observacoes na validacao item a item",
+  "add": 29,
+  "del": 9,
+  "files": 1
+ },
+ {
+  "sha": "f5791026a98bcb3c3ede886f184519a1081c748c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T12:21:13Z",
+  "message": "feat: relatorio de indicadores por obra (Excel/PDF) com grafico de pizza",
+  "add": 617,
+  "del": 8,
+  "files": 9
+ },
+ {
+  "sha": "f23961ff7fa7d1e33fb995952ffee1d62339dcc9",
+  "repo": "Obralyse-main",
+  "date": "2026-09-17T19:53:17Z",
+  "message": "feat: funcionario administrativo (fora da conformidade documental) e indicadores por colaborador",
+  "add": 619,
+  "del": 80,
+  "files": 17
+ },
+ {
+  "sha": "6363807b5fee275fe290a2dc2b87168c9c7ba6ff",
+  "repo": "LandingPage-main",
+  "date": "2026-09-18T13:31:28Z",
+  "message": "chore: comentar section da timeline",
+  "add": 9,
+  "del": 17,
+  "files": 4
+ },
+ {
+  "sha": "4a66e0b370cf4f895822e0260598d11a10f1898c",
+  "repo": "LandingPage-main",
+  "date": "2026-09-18T17:45:19Z",
+  "message": "fix: ajuste de build",
+  "add": 0,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "3b5780ed51f203e20fb34a81407379237f319286",
+  "repo": "LandingPage-main",
+  "date": "2026-09-18T18:07:50Z",
+  "message": "chore: cometado os patners",
+  "add": 21,
+  "del": 22,
+  "files": 2
+ },
+ {
+  "sha": "a0d2b33de9c99de8523b5e6432da322803c9ba99",
+  "repo": "checkObra-main",
+  "date": "2026-09-18T19:42:59Z",
+  "message": "feat: rubrica desenhada em tela cheia, foto opcional na observacao e ajustes de UX no checklist",
+  "add": 504,
+  "del": 61,
+  "files": 10
+ },
+ {
+  "sha": "5a7b3c20fdc703903bdf114435544359bb47749b",
+  "repo": "Obralyse-main",
+  "date": "2026-09-18T19:44:00Z",
+  "message": "feat: assinatura/foto da observacao, cronologia por equipamento e exportacao em PDF dos checklists",
+  "add": 793,
+  "del": 31,
+  "files": 12
+ },
+ {
+  "sha": "3218ab10e78220b651f3ce3b54a8eba369f66c33",
+  "repo": "Obralyse-main",
+  "date": "2026-09-20T16:39:22Z",
+  "message": "feat: RDO com clima detalhado, etapas, anexos, finalizacao e calendario",
+  "add": 959,
+  "del": 220,
+  "files": 14
+ },
+ {
+  "sha": "1b47b8a9630678485f3eabf57772fcd852b9f266",
+  "repo": "Obralyse-main",
+  "date": "2026-09-20T16:40:24Z",
+  "message": "feat: filtro de periodo nos indicadores com snapshot mensal por colaborador",
+  "add": 339,
+  "del": 21,
+  "files": 7
+ },
+ {
+  "sha": "2aee92d843e3ad353696128a0586e634e7c42327",
+  "repo": "Obralyse-main",
+  "date": "2026-09-20T16:40:56Z",
+  "message": "feat: agrupa checklists por obra em linhas compactas",
+  "add": 68,
+  "del": 43,
+  "files": 1
+ },
+ {
+  "sha": "0cc7c044c3d42b793d959f20c4ad6236303c03fd",
+  "repo": "LandingPage-main",
+  "date": "2026-09-20T22:23:56Z",
+  "message": "fix: retirada da logo e ajuste no nome da Rosh",
+  "add": 20,
+  "del": 24,
+  "files": 3
+ },
+ {
+  "sha": "8039b8ef8b1901dfb15043bb9527571f565e58f0",
+  "repo": "rosh-main",
+  "date": "2026-09-21T12:59:08Z",
+  "message": "chore: retirada da logo e atualkização next",
+  "add": 13,
+  "del": 8,
+  "files": 3
+ },
+ {
+  "sha": "2b8bc242f150d75f516ce9696673a4146a401d96",
+  "repo": "LandingPage-main",
+  "date": "2026-09-21T17:01:43Z",
+  "message": "fix: retirada do favicon",
+  "add": 0,
+  "del": 52,
+  "files": 3
+ },
+ {
+  "sha": "007f34806e2ff887dcfc6eb3ca82f23e5addd548",
+  "repo": "Obralyse-main",
+  "date": "2026-09-21T17:16:47Z",
+  "message": "fix: retirada da logo",
+  "add": 0,
+  "del": 18,
+  "files": 5
+ },
+ {
+  "sha": "bea9ff357a5d46a20e55f49a6028a9d1f22464a1",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-21T17:47:59Z",
+  "message": "fix: remoção da logo rosh",
+  "add": 1,
+  "del": 1,
+  "files": 3
+ },
+ {
+  "sha": "a875afa66f73335277b5dec91fc2cdd9d8c3cef3",
+  "repo": "login-main",
+  "date": "2026-09-22T11:56:09Z",
+  "message": "chore: remove logotipo antigo não utilizado",
+  "add": 3,
+  "del": 3,
+  "files": 2
+ },
+ {
+  "sha": "323892996d96fcb1af742371fb78fb5b4f40a11c",
+  "repo": "rosh-main",
+  "date": "2026-09-22T12:19:46Z",
+  "message": "chore: retirada da logo",
+  "add": 0,
+  "del": 24,
+  "files": 8
+ },
+ {
+  "sha": "4efc7ef5512a0c5cb442ce8c316c069654d75f81",
+  "repo": "accessControl-main",
+  "date": "2026-09-22T12:43:01Z",
+  "message": "chore: retirada da logo",
+  "add": 69,
+  "del": 69,
+  "files": 12
+ },
+ {
+  "sha": "c1d6dd5faedebb283c75eb3be0e3aca8da6fb2b8",
+  "repo": "RoshSign-main",
+  "date": "2026-09-22T12:58:05Z",
+  "message": "chore: retirada da logo",
+  "add": 0,
+  "del": 15,
+  "files": 1
+ },
+ {
+  "sha": "07b21c3f18389a09525bae467e4dfd24434179ac",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T13:02:05Z",
+  "message": "feat: anotacoes, tipos de ocorrencia cadastraveis e totais de efetivo no RDO",
+  "add": 346,
+  "del": 13,
+  "files": 11
+ },
+ {
+  "sha": "389822bc385a825d2641c5df90f33b441e6e279b",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T13:04:25Z",
+  "message": "feat: validacao de RDO por etapas, configuravel por obra",
+  "add": 605,
+  "del": 11,
+  "files": 12
+ },
+ {
+  "sha": "d656c9c519d80754d9d42a0c885543646a57b69c",
+  "repo": "RoshCheck",
+  "date": "2026-09-22T13:24:30Z",
+  "message": "chore: retirada da logo",
+  "add": 1204,
+  "del": 460,
+  "files": 13
+ },
+ {
+  "sha": "31acffc7be7fd7d50f1eb555e78dd78f8b8f27fc",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T13:30:58Z",
+  "message": "fix: build quebrado pela remocao da logo (public/logo-rosh.png)",
+  "add": 29,
+  "del": 13,
+  "files": 4
+ },
+ {
+  "sha": "de7fc75fc074b5677098df6f0bee94d0b866b46d",
+  "repo": "InventarioTI-Web",
+  "date": "2026-09-22T13:47:44Z",
+  "message": "chore: retirada da logo",
+  "add": 63,
+  "del": 75,
+  "files": 10
+ },
+ {
+  "sha": "458e042c40f9ea0e9685f5f1f8a8047eafb8ca15",
+  "repo": "InventarioTI-Web",
+  "date": "2026-09-22T13:47:50Z",
+  "message": "Merge branch 'main' of https://github.com/Rosh-Participacoes/InventarioTI-Web",
+  "add": 895,
+  "del": 147,
+  "files": 21
+ },
+ {
+  "sha": "fb584bb4a146650e0a6d17cd8959a8b44419ddd4",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T13:55:16Z",
+  "message": "feat: KPIs de RDOs realizados/em andamento no calendario da obra",
+  "add": 25,
+  "del": 5,
+  "files": 2
+ },
+ {
+  "sha": "0cf1a5940c76acd22a702e9fa54e561bdbb86886",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T14:09:48Z",
+  "message": "feat: etapa/responsaveis em Atividades e calendario clicavel pra criar RDO",
+  "add": 83,
+  "del": 15,
+  "files": 5
+ },
+ {
+  "sha": "d3d5a9bcc72bd20eff1328395363b8b0e5e6475a",
+  "repo": "accessControl-main",
+  "date": "2026-09-22T14:16:35Z",
+  "message": "fix: corrige erro ao gerar relatorio na ficha do colaborador",
+  "add": 2,
+  "del": 11,
+  "files": 1
+ },
+ {
+  "sha": "b3e0180d00312c59e05ea67aa2d221528ff793ef",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-22T15:15:18Z",
+  "message": "Feat - Apropriação de Despesas na Solicitação de Adiantamento (Financeiro)",
+  "add": 502,
+  "del": 5,
+  "files": 11
+ },
+ {
+  "sha": "832e9455e418ac1e612fd890e8b63e67ad8152d5",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T15:15:54Z",
+  "message": "feat: status \"nao aplicavel\" e preferencias de etapas por obra no RDO",
+  "add": 320,
+  "del": 52,
+  "files": 12
+ },
+ {
+  "sha": "317e5299d5c8a2f546254cba08737d1594d8763c",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-22T17:14:43Z",
+  "message": "Feat - Busca de Fornecedor (credor Sienge) na Solicitação de Adiantamento",
+  "add": 90,
+  "del": 9,
+  "files": 3
+ },
+ {
+  "sha": "2f0d93a4b2d1879f8fbee94f216cca55873d085b",
+  "repo": "Obralyse-main",
+  "date": "2026-09-22T17:56:42Z",
+  "message": "feat: sub-toggles de campo nas preferencias do RDO; fix: form nao usava a largura disponivel",
+  "add": 367,
+  "del": 178,
+  "files": 7
+ },
+ {
+  "sha": "d173bb04710f25226e778ebc3727aee8483c823b",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-22T19:20:53Z",
+  "message": "Fix - Apropriação de Despesas (Adiantamento): UX e obrigatoriedade",
+  "add": 18,
+  "del": 5,
+  "files": 2
+ },
+ {
+  "sha": "e96e7a345ce9bab430cce885d1ae5154cd739663",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-23T12:37:06Z",
+  "message": "Fix - Adiantamento: relatório completo, campos com rótulo e chat com colar imagem",
+  "add": 234,
+  "del": 82,
+  "files": 5
+ },
+ {
+  "sha": "a38fa7ed3f8fd7286d8daf8af3d1a873546243f5",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-23T13:47:49Z",
+  "message": "Fix - Chat: colar print funciona com foco fora do campo // Fix - Relatório Adiantamento: quebra de linha por campo e títulos não cortados",
+  "add": 68,
+  "del": 29,
+  "files": 3
+ },
+ {
+  "sha": "6a10e6ea2945b3de4b2e1f1d654f5a6772698b76",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-23T14:57:47Z",
+  "message": "Feat - Adiantamento: campo Empresa (busca do Sienge)",
+  "add": 44,
+  "del": 6,
+  "files": 7
+ },
+ {
+  "sha": "2bf7b2dbedd40f4ca36cea0bc408c757bc99d37c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:13:38Z",
+  "message": "feat: assinatura eletronica com trilha de auditoria e selo PAdES ICP-Brasil nos treinamentos",
+  "add": 2336,
+  "del": 102,
+  "files": 28
+ },
+ {
+  "sha": "81db422d01ae193d55d526c43c9dab4966c7c104",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:13:39Z",
+  "message": "feat: painel de indicadores, evidencia de assinatura e ficha NR-6 em PDF nos EPIs",
+  "add": 272,
+  "del": 9,
+  "files": 7
+ },
+ {
+  "sha": "61db96c89d433f54439710ba5fb2fb3bea6dc753",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:22:20Z",
+  "message": "feat: vida util e validade de CA nas entregas de EPI",
+  "add": 79,
+  "del": 6,
+  "files": 7
+ },
+ {
+  "sha": "61d291b0d752a8a39afd2a09c8db7e7e41c36a2c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:30:49Z",
+  "message": "feat: treinamentos e EPIs na ficha do colaborador",
+  "add": 81,
+  "del": 0,
+  "files": 2
+ },
+ {
+  "sha": "df7db1a63934079f95e8fba35a210a106c5d9db8",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:40:45Z",
+  "message": "feat: confirmacao e rastro de quem devolveu o EPI",
+  "add": 31,
+  "del": 15,
+  "files": 5
+ },
+ {
+  "sha": "24219473bdec9aab79372c58b03cd5cfa88489a8",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:45:01Z",
+  "message": "fix: troca do globe.svg e vercel.svg",
+  "add": 2,
+  "del": 36,
+  "files": 2
+ },
+ {
+  "sha": "df43887977caca18260ebf2ac9790a8a46116345",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T17:50:38Z",
+  "message": "Merge pull request #1 from Rosh-Participacoes/feat/assinatura-eletronica-treinamentos",
+  "add": 2798,
+  "del": 165,
+  "files": 43
+ },
+ {
+  "sha": "7b9676c547a112f54fc8233bbf2dc58cc56c9e86",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T18:19:37Z",
+  "message": "feat: nao conformidades vencidas e exige solucao adotada pra resolver",
+  "add": 134,
+  "del": 18,
+  "files": 9
+ },
+ {
+  "sha": "612de3027e5fb6b2043d59b7bb1353cbbba95214",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T18:25:42Z",
+  "message": "fix: trata HttpError na rota checkobra/dispositivo em vez de deixar subir cru",
+  "add": 18,
+  "del": 12,
+  "files": 1
+ },
+ {
+  "sha": "2e08de4175c6b2dd4096c4bdb2547b21012821ed",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T18:31:01Z",
+  "message": "feat: alerta de validade vencida/a vencer em Equipamentos",
+  "add": 135,
+  "del": 20,
+  "files": 4
+ },
+ {
+  "sha": "d127b4b6a6126cdab77ffbddfc59638d7f128df4",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T19:29:27Z",
+  "message": "feat: multiplos anexos por treinamento/documento na ficha do colaborador",
+  "add": 255,
+  "del": 81,
+  "files": 4
+ },
+ {
+  "sha": "f34861b3a831c05a204b114ff9748030e5ea898f",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T19:47:42Z",
+  "message": "fix: importacao de colaboradores via CSV nao criava as tarefas padrao de conformidade",
+  "add": 32,
+  "del": 1,
+  "files": 2
+ },
+ {
+  "sha": "e602638c7e118cda31a015da7cb6bf777b36819a",
+  "repo": "Obralyse-main",
+  "date": "2026-09-23T20:32:02Z",
+  "message": "feat: inativacao automatica por falta de movimentacao e permissoes granulares por recurso",
+  "add": 667,
+  "del": 84,
+  "files": 29
+ },
+ {
+  "sha": "29713e4981bc72892e1c87cc2cfe9187948b83b9",
+  "repo": "InventarioTI-Web",
+  "date": "2026-09-24T12:53:15Z",
+  "message": "fix: remove referência quebrada a TERMO_LOGO_URL no termo do RoshSign",
+  "add": 0,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "1464647875b66a17c2fcf5ea79747ce5a0bebe10",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T15:13:59Z",
+  "message": "feat: relatorio de analise documental por periodo em indicadores",
+  "add": 380,
+  "del": 5,
+  "files": 8
+ },
+ {
+  "sha": "153669eda88c00e8833e1b98f4e6ef5a0ebf0a13",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T16:40:55Z",
+  "message": "feat: historico imutavel de movimentacoes documentais e dashboard com nota por obra",
+  "add": 472,
+  "del": 122,
+  "files": 11
+ },
+ {
+  "sha": "7d68cf2409b3b4ccd1b68de4656ffa6a6c6e05c2",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T17:12:57Z",
+  "message": "feat: indicadores de meses passados com retrato diario e redesenho dos KPIs",
+  "add": 514,
+  "del": 413,
+  "files": 8
+ },
+ {
+  "sha": "e5e264ffab0ed37ad284e848770178817daa7a54",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T18:20:13Z",
+  "message": "feat: auditoria de todos os CRUDs e dashboard admin preciso",
+  "add": 415,
+  "del": 155,
+  "files": 28
+ },
+ {
+  "sha": "a6cc5f1848e9617f739be0fd248bfd2886b6a9f6",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T18:37:10Z",
+  "message": "feat: ampliar foto do colaborador ao clicar",
+  "add": 19,
+  "del": 7,
+  "files": 1
+ },
+ {
+  "sha": "8f9d3a707ee78348a6968228240ee955e5209b8d",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T18:40:29Z",
+  "message": "feat: dashboard painel 360 com inspecoes recentes e modelos pendentes",
+  "add": 583,
+  "del": 365,
+  "files": 12
+ },
+ {
+  "sha": "ed9cb8fc87ebaf6ba427096a11e5b432464e3d39",
+  "repo": "Obralyse-main",
+  "date": "2026-09-24T19:25:00Z",
+  "message": "fix: exclusao de local valida a obra do proprio documento",
+  "add": 16,
+  "del": 7,
+  "files": 4
+ },
+ {
+  "sha": "8a29427b66159ab98d8743f66d74d9afa8cd1bf3",
+  "repo": "Obralyse-main",
+  "date": "2026-09-25T12:42:23Z",
+  "message": "fix: tela de acesso restrito (403) no lugar do erro 500 e abas do controle de acesso filtradas por permissao",
+  "add": 46,
+  "del": 8,
+  "files": 6
+ },
+ {
+  "sha": "365da0e38de4b6f2e86c40e35f65da1b4d726542",
+  "repo": "Obralyse-main",
+  "date": "2026-09-25T13:51:52Z",
+  "message": "feat: linha do tempo documental com tempo por etapa, correcao e resumo por empresa",
+  "add": 532,
+  "del": 126,
+  "files": 10
+ },
+ {
+  "sha": "bfc347f30f66a0c80b9c4d086749eccf2cc0de1f",
+  "repo": "Obralyse-main",
+  "date": "2026-09-26T01:27:32Z",
+  "message": "perf: varredura unica de colaboradores com memo em memoria",
+  "add": 134,
+  "del": 131,
+  "files": 7
+ },
+ {
+  "sha": "dde346c7178aa3125234a6a3c0df7d3164c70859",
+  "repo": "OpenTicket-main",
+  "date": "2026-09-28T11:46:37Z",
+  "message": "fix: tirando obrigatoriedade em alguns campos do adiantamento para o financeiro",
+  "add": 33,
+  "del": 35,
+  "files": 3
+ },
+ {
+  "sha": "f87f53fcac6c9403df204359e341e0075faefd05",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T11:52:00Z",
+  "message": "feat: link publico de envio de documentos e salvamento automatico do cadastro",
+  "add": 1137,
+  "del": 26,
+  "files": 13
+ },
+ {
+  "sha": "50d2a708a59572cbfe62f32316de6adee3249f63",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T12:32:26Z",
+  "message": "feat: modulo Documentos (Fase 1) -- pastas, pendencias, atualizacoes e lixeira",
+  "add": 698,
+  "del": 1,
+  "files": 12
+ },
+ {
+  "sha": "0f21a70b088ee7e3912b92edb5ead74af9529012",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T14:11:52Z",
+  "message": "feat: inativacao em 60 dias, aprovacao agregada com liberacao automatica de acesso e historico de empresas",
+  "add": 188,
+  "del": 6,
+  "files": 6
+ },
+ {
+  "sha": "d224235687ee4d6e138294a57c33f8ee2e23b655",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T14:56:35Z",
+  "message": "feat: pasta de empresa em Documentos vira lista achatada de todos os documentos",
+  "add": 308,
+  "del": 8,
+  "files": 7
+ },
+ {
+  "sha": "5dc41fafab34282366d9ca43d6acce222ce31928",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T15:01:03Z",
+  "message": "fix: auditoria de colaborador passa a rastrear troca de anexos (array), nao so o campo legado",
+  "add": 31,
+  "del": 0,
+  "files": 2
+ },
+ {
+  "sha": "d12e4b2aa3b746d8cd87973d7589ee37d7af7f9c",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T15:45:50Z",
+  "message": "feat: agrupa a lista de documentos por empresa em pastas de colaborador",
+  "add": 97,
+  "del": 27,
+  "files": 1
+ },
+ {
+  "sha": "93887475ea3f3a07bd377a413735f31093cfe1f6",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T18:55:41Z",
+  "message": "feat: administrativo passa a aparecer em Documentos > Pendencias",
+  "add": 6,
+  "del": 3,
+  "files": 2
+ },
+ {
+  "sha": "bb0938348f573c2e1df624fd2d33019b4fad6ce9",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T19:28:23Z",
+  "message": "feat: Documentos ganha permissao propria, independente de Colaboradores",
+  "add": 68,
+  "del": 20,
+  "files": 12
+ },
+ {
+  "sha": "c46ff34c628a2cd8a368911539344dac59025385",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T19:30:37Z",
+  "message": "fix: silencia warning de <script> no RootLayout (React 19 / Next 16)",
+  "add": 14,
+  "del": 1,
+  "files": 1
+ },
+ {
+  "sha": "5b986777ee134afda5e7e7ef265f2826223820ca",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T20:17:03Z",
+  "message": "fix: pasta de empresa em Documentos usa o nome mais frequente do CNPJ",
+  "add": 182,
+  "del": 24,
+  "files": 3
+ },
+ {
+  "sha": "fc5469e037573b3cca52702caaf843e5a0d24a94",
+  "repo": "Obralyse-main",
+  "date": "2026-09-28T20:23:35Z",
+  "message": "fix: warning de Select nao-controlado ao limpar filtros em Documentos",
+  "add": 5,
+  "del": 1,
+  "files": 1
+ }
+]
