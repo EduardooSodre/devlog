@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users, workspaces } from "@/lib/db/schema";
+import { users, workspaces, savedReports } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyWorkspaceAccess } from "@/lib/workspace";
 import { getReportData } from "@/lib/reports";
@@ -68,11 +68,19 @@ export async function POST(req: NextRequest) {
 
   const aiStatus = isOpenAiConfigured() ? await getAiReportStatus(session.user.id) : { limit: 0, usedToday: 0, remaining: 0 };
 
-  return NextResponse.json({
-    data,
-    meta: { userName: user?.name ?? null, workspaceName: workspace?.name ?? "" },
-    aiSummary,
-    aiUsed,
-    aiRemainingToday: aiStatus.remaining,
-  });
+  const meta = { userName: user?.name ?? null, workspaceName: workspace?.name ?? "" };
+
+  // Guarda o relatório pra reabrir depois. Falha ao salvar não derruba a geração.
+  let savedId: string | null = null;
+  try {
+    const [row] = await db
+      .insert(savedReports)
+      .values({ userId: session.user.id, workspaceId, periodStart: start, periodEnd: end, aiUsed, payload: { data, meta, aiSummary } })
+      .returning({ id: savedReports.id });
+    savedId = row.id;
+  } catch (error) {
+    console.error("[reports/generate] não salvou o relatório", error);
+  }
+
+  return NextResponse.json({ data, meta, aiSummary, aiUsed, aiRemainingToday: aiStatus.remaining, savedId });
 }

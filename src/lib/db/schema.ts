@@ -20,6 +20,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -685,6 +686,32 @@ export const aiReportUsage = pgTable(
   (table) => ({
     userDaySlotUnique: uniqueIndex("ai_usage_user_day_slot_idx").on(table.userId, table.usedOn, table.slot),
     usedOnIdx: index("ai_usage_used_on_idx").on(table.usedOn),
+  })
+);
+
+// Relatórios de trabalho gerados — guardados pra pessoa reabrir depois (o resumo de IA
+// custa um uso do limite diário, então não pode sumir ao fechar a pré-visualização).
+// `payload` é exatamente o que a pré-visualização recebe: { data, meta, aiSummary }.
+export const savedReports = pgTable(
+  "saved_reports",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    periodStart: text("period_start").notNull(), // "YYYY-MM-DD"
+    periodEnd: text("period_end").notNull(),
+    aiUsed: boolean("ai_used").notNull().default(false),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userCreatedIdx: index("saved_reports_user_created_idx").on(table.userId, table.createdAt),
   })
 );
 

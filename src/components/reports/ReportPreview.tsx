@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, Download, Printer, Sparkles } from "lucide-react";
+import { X, Download, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { downloadReportPdf } from "@/lib/reports-pdf";
 import { PRIORITY_LABELS, DIFFICULTY_LABELS, DOC_TYPE_LABELS, formatDateOnly } from "@/lib/report-labels";
 
 export type ReportCard = {
@@ -45,6 +46,7 @@ export type ReportPayload = {
 
 export function ReportPreview({ report, onClose }: { report: ReportPayload; onClose: () => void }) {
   const [downloading, setDownloading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const { data, meta, aiSummary } = report;
 
   async function handleDownloadExcel() {
@@ -67,6 +69,17 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
       toast.error("Erro ao gerar Excel");
     } finally {
       setDownloading(false);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    setDownloadingPdf(true);
+    try {
+      await downloadReportPdf(report);
+    } catch {
+      toast.error("Erro ao gerar PDF");
+    } finally {
+      setDownloadingPdf(false);
     }
   }
 
@@ -97,10 +110,11 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
                 <Download className="w-3.5 h-3.5" /> Baixar Excel
               </button>
               <button
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                <Printer className="w-3.5 h-3.5" /> Baixar PDF
+                <FileText className="w-3.5 h-3.5" /> Baixar PDF
               </button>
               <button onClick={onClose} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 transition-colors" title="Fechar">
                 <X className="w-4 h-4" />

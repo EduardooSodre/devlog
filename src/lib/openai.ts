@@ -73,11 +73,19 @@ export async function generateWorkReportSummary({
   const periodLabel = formatPeriodLabel(data.period.start, data.period.end);
 
   const systemPrompt =
-    `Você ajuda um(a) ${role} a resumir o próprio trabalho para o gestor dele(a). ` +
-    `Escreva em português do Brasil, em tom profissional e direto, adaptando o vocabulário à função de ${role}. ` +
-    `Use SOMENTE as informações fornecidas — nunca invente entregas, números ou detalhes que não estejam nos dados. ` +
-    `Estruture como: um parágrafo curto de abertura, seguido de bullet points agrupando as principais entregas por tema/impacto, ` +
-    `e uma frase final sobre o que está em andamento. Seja objetivo, sem enrolação.`;
+    `Você escreve, em primeira pessoa, o relatório de trabalho de um(a) ${role} para o gestor dele(a), que NÃO entende de tecnologia. ` +
+    `Escreva em português do Brasil, de um jeito tão simples que uma criança de 5 anos entenderia: frases curtas, palavras do dia a dia, uma ideia por frase. ` +
+    `Diga o que foi FEITO e o que isso MUDOU na prática (o que ficou mais rápido, mais fácil, mais seguro ou o que voltou a funcionar). ` +
+    `PROIBIDO usar jargão: nada de git, commit, deploy, build, merge, pull request, branch, API, refactor, bug, endpoint, banco de dados, nomes de arquivos, hashes, números de linhas ou de commits. ` +
+    `Se um dado for técnico, traduza (ex.: "corrigi um erro que travava a tela de login" em vez de "fix no middleware"). ` +
+    `Os nomes dos sistemas da empresa (ex.: Obralyse, RoshSign) podem aparecer, sempre com uma explicação curta do que o sistema faz, se isso estiver nos dados. ` +
+    `Use SOMENTE as informações fornecidas — nunca invente entregas, números ou detalhes. Ignore estatísticas técnicas presentes nos dados. ` +
+    `Junte itens parecidos: no máximo 10 tópicos. ` +
+    `Formato, sem markdown (sem #, ** ou tabelas): ` +
+    `1) uma frase de abertura com o resumo do período; ` +
+    `2) a linha "O que eu fiz:" seguida de tópicos, cada um começando com "- " e terminando com o resultado prático; ` +
+    `3) se houver, a linha "O que ainda estou fazendo:" com tópicos no mesmo estilo; ` +
+    `4) uma frase final curta.`;
 
   const userPrompt =
     `Nome: ${userName ?? "não informado"}\nPeríodo do relatório: ${periodLabel}\n\n${buildDataSummary(data)}`;
@@ -89,7 +97,7 @@ export async function generateWorkReportSummary({
       { role: "user", content: userPrompt },
     ],
     temperature: 0.4,
-    max_tokens: 900,
+    max_tokens: 1200,
   });
 
   const text = completion.choices[0]?.message?.content?.trim();
