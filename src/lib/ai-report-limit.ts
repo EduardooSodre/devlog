@@ -1,5 +1,5 @@
 /**
- * Limite diário de relatórios gerados com IA — 1x/dia por usuário por padrão,
+ * Limite diário de relatórios gerados com IA — 2x/dia por usuário por padrão,
  * ajustável pelo super admin (chave "ai_report_daily_limit" em system_settings).
  *
  * A checagem é atômica via INSERT...ON CONFLICT DO NOTHING num slot (0..limite-1):
@@ -16,7 +16,7 @@ import { and, eq, count } from "drizzle-orm";
 import { todayInBrasilia } from "@/lib/date-brasilia";
 import { getSetting, setSetting } from "@/lib/system-settings";
 
-const DEFAULT_DAILY_LIMIT = 1;
+const DEFAULT_DAILY_LIMIT = 2;
 const SETTING_KEY = "ai_report_daily_limit";
 
 export async function getAiReportDailyLimit(): Promise<number> {

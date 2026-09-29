@@ -12,10 +12,14 @@ export type ReportCard = {
   priority: string;
   difficulty: string;
   status: string;
+  description: string;
   completionNotes: string | null;
+  startDate: string | null;
   completedAt: string | null;
   dueDate: string | null;
+  createdAt: string;
   updatedAt: string;
+  subtasks: { title: string; isDone: boolean }[];
 };
 
 export type ReportDoc = {
@@ -23,6 +27,7 @@ export type ReportDoc = {
   title: string;
   type: string;
   summary: string | null;
+  content: string;
   createdAt: string;
 };
 
@@ -145,6 +150,7 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
                       <span>·</span>
                       <span>{DIFFICULTY_LABELS[c.difficulty] ?? c.difficulty}</span>
                     </div>
+                    <CardDetails card={c} />
                     {c.completionNotes && <p className="text-xs text-slate-500 mt-1 italic">{c.completionNotes}</p>}
                   </li>
                 ))
@@ -156,9 +162,12 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
                 <EmptyRow />
               ) : (
                 data.inProgressCards.map((c) => (
-                  <li key={c.id} className="py-2 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-slate-800">{c.title}</span>
-                    <span className="text-xs text-slate-400 shrink-0">{c.boardName}</span>
+                  <li key={c.id} className="py-2 border-b border-slate-100 last:border-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-slate-800">{c.title}</span>
+                      <span className="text-xs text-slate-400 shrink-0">{c.boardName}</span>
+                    </div>
+                    <CardDetails card={c} />
                   </li>
                 ))
               )}
@@ -176,6 +185,7 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">{DOC_TYPE_LABELS[d.type] ?? d.type}</div>
                     {d.summary && <p className="text-xs text-slate-500 mt-1">{d.summary}</p>}
+                    {d.content && <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">{d.content}</p>}
                   </li>
                 ))
               )}
@@ -183,6 +193,21 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
           </div>
         </div>
       </div>
+    </>
+  );
+}
+
+function CardDetails({ card }: { card: ReportCard }) {
+  return (
+    <>
+      {card.description && <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">{card.description}</p>}
+      {card.subtasks.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {card.subtasks.map((st, i) => (
+            <li key={i} className="text-xs text-slate-500">{st.isDone ? "☑" : "☐"} {st.title}</li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }

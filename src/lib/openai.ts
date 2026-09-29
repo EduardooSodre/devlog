@@ -29,24 +29,29 @@ function formatPeriodLabel(start: string, end: string): string {
 
 /** Monta um resumo em texto simples (sem markdown) dos dados do relatório, pra
  * servir de contexto pro modelo — só o que existe no banco, nada inventado. */
+const short = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t);
+const withDetails = (c: ReportData["completedCards"][number]) =>
+  (c.description ? ` — descrição: ${short(c.description.replace(/\s+/g, " "), 300)}` : "") +
+  (c.subtasks.length ? ` — subtarefas: ${c.subtasks.slice(0, 15).map((s) => `${s.isDone ? "feita" : "pendente"}: ${short(s.title, 80)}`).join("; ")}` : "");
+
 function buildDataSummary(data: ReportData): string {
   const lines: string[] = [];
 
   lines.push(`Tarefas concluídas no período (${data.completedCards.length}):`);
   for (const c of data.completedCards) {
-    lines.push(`- "${c.title}" [board: ${c.boardName}, prioridade: ${c.priority}, dificuldade: ${c.difficulty}]${c.completionNotes ? ` — obs: ${c.completionNotes}` : ""}`);
+    lines.push(`- "${c.title}" [board: ${c.boardName}, prioridade: ${c.priority}, dificuldade: ${c.difficulty}]${c.completionNotes ? ` — obs: ${c.completionNotes}` : ""}${withDetails(c)}`);
   }
   if (data.completedCards.length === 0) lines.push("- (nenhuma)");
 
   lines.push("", `Tarefas em andamento (${data.inProgressCards.length}):`);
   for (const c of data.inProgressCards) {
-    lines.push(`- "${c.title}" [board: ${c.boardName}, prioridade: ${c.priority}]`);
+    lines.push(`- "${c.title}" [board: ${c.boardName}, prioridade: ${c.priority}]${withDetails(c)}`);
   }
   if (data.inProgressCards.length === 0) lines.push("- (nenhuma)");
 
   lines.push("", `Documentações registradas no período (${data.docs.length}):`);
   for (const d of data.docs) {
-    lines.push(`- "${d.title}" [tipo: ${d.type}]${d.summary ? ` — ${d.summary}` : ""}`);
+    lines.push(`- "${d.title}" [tipo: ${d.type}]${d.summary ? ` — ${d.summary}` : ""}${d.content ? ` — conteúdo: ${short(d.content.replace(/\s+/g, " "), 300)}` : ""}`);
   }
   if (data.docs.length === 0) lines.push("- (nenhuma)");
 
@@ -84,7 +89,7 @@ export async function generateWorkReportSummary({
       { role: "user", content: userPrompt },
     ],
     temperature: 0.4,
-    max_tokens: 700,
+    max_tokens: 900,
   });
 
   const text = completion.choices[0]?.message?.content?.trim();

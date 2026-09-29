@@ -38,3 +38,25 @@ export function formatDateOnly(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(d);
 }
+
+/** HTML do TipTap → texto puro (itens de lista viram "• ", blocos viram quebras de linha). */
+export function htmlToText(html: string | null | undefined): string {
+  if (!html) return "";
+  return html
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<\/(p|li|h[1-6]|pre|div|ul|ol)>|<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Subtarefas em texto: "☑ feita" / "☐ pendente", uma por linha. */
+export function subtasksText(subtasks: { title: string; isDone: boolean }[]): string {
+  return subtasks.map((s) => `${s.isDone ? "☑" : "☐"} ${s.title}`).join("\n");
+}

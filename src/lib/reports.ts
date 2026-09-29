@@ -1,12 +1,14 @@
 /**
  * Dados do relatório de trabalho (Excel/PDF, com ou sem resumo de IA) — cards do
- * Kanban onde o usuário é criador ou responsável, e documentações que ele
- * escreveu, dentro de um período e escopados ao workspace ativo.
+ * Kanban onde o usuário é criador, responsável ou responsável por alguma subtarefa
+ * (incluindo arquivados — trabalho concluído e depois arquivado continua sendo
+ * trabalho feito), e documentações que ele escreveu ou editou, dentro de um período e escopados ao workspace ativo.
  */
 
 import { db } from "@/lib/db";
-import { kanbanCards, kanbanBoards, docEntries } from "@/lib/db/schema";
-import { and, eq, or, gte, lte, desc } from "drizzle-orm";
+import { kanbanCards, kanbanBoards, docEntries, cardSubtasks } from "@/lib/db/schema";
+import { and, eq, or, gte, lte, desc, inArray } from "drizzle-orm";
+import { htmlToText } from "@/lib/report-labels";
 
 export type ReportCard = {
   id: string;
@@ -15,10 +17,14 @@ export type ReportCard = {
   priority: string;
   difficulty: string;
   status: string;
+  description: string;
   completionNotes: string | null;
+  startDate: Date | null;
   completedAt: Date | null;
   dueDate: Date | null;
+  createdAt: Date;
   updatedAt: Date;
+  subtasks: { title: string; isDone: boolean }[];
 };
 
 export type ReportDoc = {
@@ -26,6 +32,7 @@ export type ReportDoc = {
   title: string;
   type: string;
   summary: string | null;
+  content: string;
   createdAt: Date;
 };
 
@@ -58,7 +65,7 @@ export async function getReportData({
   const rangeStart = dayBoundsInBrasilia(start, false);
   const rangeEnd = dayBoundsInBrasilia(end, true);
 
-  const ownCards = await db
+  const rows = await db
     .select({
       id: kanbanCards.id,
       title: kanbanCards.title,
@@ -66,26 +73,50 @@ export async function getReportData({
       priority: kanbanCards.priority,
       difficulty: kanbanCards.difficulty,
       status: kanbanCards.status,
+      description: kanbanCards.description,
       completionNotes: kanbanCards.completionNotes,
+      startDate: kanbanCards.startDate,
       completedAt: kanbanCards.completedAt,
       dueDate: kanbanCards.dueDate,
+      createdAt: kanbanCards.createdAt,
       updatedAt: kanbanCards.updatedAt,
+      isArchived: kanbanCards.isArchived,
     })
     .from(kanbanCards)
     .innerJoin(kanbanBoards, eq(kanbanCards.boardId, kanbanBoards.id))
     .where(
       and(
         eq(kanbanBoards.workspaceId, workspaceId),
-        eq(kanbanCards.isArchived, false),
-        or(eq(kanbanCards.createdById, userId), eq(kanbanCards.assignedToId, userId))
+        or(
+          eq(kanbanCards.createdById, userId),
+          eq(kanbanCards.assignedToId, userId),
+          inArray(kanbanCards.id, db.select({ id: cardSubtasks.cardId }).from(cardSubtasks).where(eq(cardSubtasks.assignedToId, userId)))
+        )
       )
     )
     .orderBy(desc(kanbanCards.updatedAt));
 
-  const completedCards = ownCards.filter(
-    (c) => c.status === "done" && c.completedAt && c.completedAt >= rangeStart && c.completedAt <= rangeEnd
-  );
-  const inProgressCards = ownCards.filter((c) => c.status === "in_progress" || c.status === "todo");
+  const subs = rows.length
+    ? await db
+        .select({ cardId: cardSubtasks.cardId, title: cardSubtasks.title, isDone: cardSubtasks.isDone })
+        .from(cardSubtasks)
+        .where(inArray(cardSubtasks.cardId, rows.map((r) => r.id)))
+        .orderBy(cardSubtasks.order)
+    : [];
+  const subsByCard = new Map<string, { title: string; isDone: boolean }[]>();
+  for (const st of subs) subsByCard.set(st.cardId, [...(subsByCard.get(st.cardId) ?? []), { title: st.title, isDone: st.isDone }]);
+
+  const ownCards = rows.map(({ isArchived, ...c }) => ({
+    card: { ...c, description: htmlToText(c.description), subtasks: subsByCard.get(c.id) ?? [] },
+    isArchived,
+  }));
+
+  const completedCards = ownCards
+    .map((o) => o.card)
+    .filter((c) => c.status === "done" && c.completedAt && c.completedAt >= rangeStart && c.completedAt <= rangeEnd);
+  const inProgressCards = ownCards
+    .filter((o) => !o.isArchived && (o.card.status === "in_progress" || o.card.status === "todo"))
+    .map((o) => o.card);
 
   const docs = await db
     .select({
@@ -93,6 +124,7 @@ export async function getReportData({
       title: docEntries.title,
       type: docEntries.type,
       summary: docEntries.summary,
+      content: docEntries.content,
       createdAt: docEntries.createdAt,
     })
     .from(docEntries)
@@ -100,8 +132,10 @@ export async function getReportData({
       and(
         eq(docEntries.workspaceId, workspaceId),
         eq(docEntries.authorId, userId),
-        gte(docEntries.createdAt, rangeStart),
-        lte(docEntries.createdAt, rangeEnd)
+        or(
+          and(gte(docEntries.createdAt, rangeStart), lte(docEntries.createdAt, rangeEnd)),
+          and(gte(docEntries.updatedAt, rangeStart), lte(docEntries.updatedAt, rangeEnd))
+        )
       )
     )
     .orderBy(desc(docEntries.createdAt));
@@ -111,6 +145,6 @@ export async function getReportData({
     stats: { completed: completedCards.length, inProgress: inProgressCards.length, docs: docs.length },
     completedCards,
     inProgressCards,
-    docs,
+    docs: docs.map((d) => ({ ...d, content: htmlToText(d.content) })),
   };
 }

@@ -17,10 +17,14 @@ const cardSchema = z.object({
   priority: z.string(),
   difficulty: z.string(),
   status: z.string(),
+  description: z.string(),
   completionNotes: z.string().nullable(),
+  startDate: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
   dueDate: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  subtasks: z.array(z.object({ title: z.string(), isDone: z.boolean() })),
 });
 
 const bodySchema = z.object({
@@ -35,6 +39,7 @@ const bodySchema = z.object({
         title: z.string(),
         type: z.string(),
         summary: z.string().nullable(),
+        content: z.string(),
         createdAt: z.coerce.date(),
       })
     ),
