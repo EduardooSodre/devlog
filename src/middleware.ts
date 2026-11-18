@@ -13,11 +13,11 @@ import { authConfig } from "@/lib/auth.config";
 // cookie. A instância completa (auth.ts) roda nas rotas de API, em Node.
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/api/workspaces/invites/accept"];
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/forgot-password", "/api/workspaces/invites/accept"];
 // Prefixos que se autenticam por conta própria: token no link (convite, verificação de
 // e-mail), assinatura do Stripe (webhooks) ou CRON_SECRET (cron). Passar pelo redirect
 // pro /login aqui quebrava esses fluxos — o cron, por exemplo, nunca rodava.
-const PUBLIC_PREFIXES = ["/api/auth", "/api/webhooks/", "/api/cron/", "/invite/", "/verify-email/"];
+const PUBLIC_PREFIXES = ["/api/auth", "/api/webhooks/", "/api/cron/", "/invite/", "/verify-email/", "/reset-password/"];
 const AUTH_ROUTES = ["/login", "/register"]; // redireciona para /dashboard se já logado
 
 export default auth((req) => {

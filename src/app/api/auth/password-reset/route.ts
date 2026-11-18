@@ -1,0 +1,33 @@
+/**
+ * POST /api/auth/password-reset
+ *   { email }            → envia o link (sempre 200, não revela se a conta existe)
+ *   { token, password }  → troca a senha
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { requestPasswordReset, resetPassword } from "@/lib/password-reset";
+
+const schema = z.union([
+  z.object({ token: z.string().min(1), password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres") }),
+  z.object({ email: z.string().email("Email inválido") }),
+]);
+
+export async function POST(req: NextRequest) {
+  const parsed = schema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
+  }
+
+  try {
+    if ("token" in parsed.data) {
+      const result = await resetPassword(parsed.data.token, parsed.data.password);
+      if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    } else {
+      await requestPasswordReset(parsed.data.email.trim());
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[POST /api/auth/password-reset]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
