@@ -36,6 +36,11 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(target, nextUrl));
   }
 
+  // Logado não vê a landing — vai direto pro dashboard.
+  if (isLoggedIn && nextUrl.pathname === "/") {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+  }
+
   // Rota protegida sem sessão → redireciona para /login
   if (!isPublicRoute && !isLoggedIn) {
     const loginUrl = new URL("/login", nextUrl);
