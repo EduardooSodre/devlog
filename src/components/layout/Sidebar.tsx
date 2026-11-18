@@ -39,14 +39,17 @@ const allBottomItems = [
 interface SidebarProps {
   workspaces?: WorkspaceOption[];
   activeWorkspaceId?: string;
-  /** Só o dono do workspace (quem paga) vê a área de pagamentos. */
+  /** Dono (quem paga) vê "Plano & Billing"; os demais veem "Meu plano" (só leitura). */
   isBillingOwner?: boolean;
   /** Só o e-mail configurado em SUPER_ADMIN_EMAILS vê o painel /admin. */
   isSuperAdmin?: boolean;
 }
 
 export function Sidebar({ workspaces = [], activeWorkspaceId = "", isBillingOwner = false, isSuperAdmin = false }: SidebarProps) {
-  const bottomItems = isBillingOwner ? allBottomItems : allBottomItems.filter((i) => i.href !== "/settings/billing");
+  // Quem não paga também vê a página, em modo leitura ("de qual organização sou, quem paga").
+  const bottomItems = isBillingOwner
+    ? allBottomItems
+    : allBottomItems.map((i) => (i.href === "/settings/billing" ? { ...i, label: "Meu plano" } : i));
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);

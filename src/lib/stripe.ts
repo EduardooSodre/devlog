@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import { PLANS, getPlanConfig } from "@/lib/plans";
 import { db } from "@/lib/db";
 import { subscriptions, workspaceMembers } from "@/lib/db/schema";
-import { eq, and, count, inArray } from "drizzle-orm";
+import { eq, and, count, inArray, desc } from "drizzle-orm";
 
 function getStripeSecretKey(): string {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -101,11 +101,14 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
   if (!process.env.STRIPE_SECRET_KEY) return;
 
   try {
+    // A mais recente — se existir assinatura duplicada (checkout feito duas vezes),
+    // findFirst sem ordem pegava uma qualquer e a outra nunca era ajustada.
     const sub = await db.query.subscriptions.findFirst({
       where: and(
         eq(subscriptions.workspaceId, workspaceId),
         inArray(subscriptions.status, ["active", "trialing"])
       ),
+      orderBy: [desc(subscriptions.createdAt)],
     });
     if (!sub?.stripeSubscriptionId) return;
 
@@ -125,6 +128,45 @@ export async function syncSeatQuantity(workspaceId: string): Promise<void> {
     });
   } catch (error) {
     console.error("[syncSeatQuantity]", error);
+  }
+}
+
+export type SeatSubscription = {
+  /** Assentos que a Stripe está cobrando de fato. */
+  billedSeats: number;
+  unitPrice: number; // em reais
+  periodStart: Date;
+  periodEnd: Date;
+  /** >1 = checkout feito mais de uma vez; o dono precisa cancelar a sobra no portal. */
+  activeSubscriptions: number;
+};
+
+/** Estado real da cobrança na Stripe (não o do banco, que pode estar desatualizado). */
+export async function getSeatSubscription(workspaceId: string): Promise<SeatSubscription | null> {
+  if (!process.env.STRIPE_SECRET_KEY) return null;
+  try {
+    const subs = await db.query.subscriptions.findMany({
+      where: and(eq(subscriptions.workspaceId, workspaceId), inArray(subscriptions.status, ["active", "trialing"])),
+      orderBy: [desc(subscriptions.createdAt)],
+    });
+    const latest = subs.find((s) => s.stripeSubscriptionId);
+    if (!latest?.stripeSubscriptionId) return null;
+
+    const stripeSub = await getStripe().subscriptions.retrieve(latest.stripeSubscriptionId);
+    const item = stripeSub.items.data[0];
+    if (!item) return null;
+    // Em versões novas da API o período fica no item, não na raiz (mesmo cuidado do webhook).
+    const itemPeriod = item as unknown as { current_period_start?: number; current_period_end?: number };
+    return {
+      billedSeats: item.quantity ?? 1,
+      unitPrice: (item.price.unit_amount ?? 0) / 100,
+      periodStart: new Date((itemPeriod.current_period_start ?? stripeSub.current_period_start) * 1000),
+      periodEnd: new Date((itemPeriod.current_period_end ?? stripeSub.current_period_end) * 1000),
+      activeSubscriptions: subs.length,
+    };
+  } catch (error) {
+    console.error("[getSeatSubscription]", error);
+    return null;
   }
 }
 

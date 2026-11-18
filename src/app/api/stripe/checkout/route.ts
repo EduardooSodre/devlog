@@ -4,8 +4,8 @@ import { createCheckoutSession, getOrCreateStripeCustomer } from "@/lib/stripe";
 import { PLANS } from "@/lib/plans";
 import { getActiveWorkspace, verifyWorkspaceAccess } from "@/lib/workspace";
 import { db } from "@/lib/db";
-import { workspaces, workspaceMembers } from "@/lib/db/schema";
-import { eq, count } from "drizzle-orm";
+import { workspaces, workspaceMembers, subscriptions } from "@/lib/db/schema";
+import { eq, count, and, inArray } from "drizzle-orm";
 
 export async function POST(req: Request) {
   try {
@@ -47,6 +47,17 @@ export async function POST(req: Request) {
 
     if (!workspace) {
       return NextResponse.json({ error: "Workspace não encontrado" }, { status: 404 });
+    }
+
+    // Sem isso, clicar "Assinar" duas vezes criava duas assinaturas cobrando em paralelo.
+    const existing = await db.query.subscriptions.findFirst({
+      where: and(eq(subscriptions.workspaceId, workspace.id), inArray(subscriptions.status, ["active", "trialing", "past_due"])),
+    });
+    if (existing) {
+      return NextResponse.json(
+        { error: "Este workspace já tem uma assinatura. Use \"Gerenciar assinatura\" para trocar de plano ou de cartão." },
+        { status: 409 }
+      );
     }
 
     const priceId = PLANS[targetPlan].stripePriceId;
