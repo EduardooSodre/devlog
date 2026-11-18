@@ -17,6 +17,7 @@ import { eq, and, count, sql, inArray, isNull, or, type SQL } from "drizzle-orm"
 import { getPlanConfig, isWithinLimit, type PlanId } from "@/lib/plans";
 import { isTrialExpired } from "@/lib/org-domain";
 import { isCardVisibleTo } from "@/lib/card-visibility";
+import { pickDefaultWorkspace } from "@/lib/workspace-default";
 import { isAdminRole, canManageCard, canWorkOnCard, canManageBoard } from "@/lib/permissions";
 
 export { isCardVisibleTo, isAdminRole, canManageCard, canWorkOnCard, canManageBoard };
@@ -40,7 +41,7 @@ export async function getActiveWorkspaceId(userId: string): Promise<string | nul
     return preferred;
   }
 
-  return memberships[0].workspaceId;
+  return pickDefaultWorkspace(memberships);
 }
 
 export async function getActiveWorkspace(userId: string) {
