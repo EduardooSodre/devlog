@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import type { WorkspaceOption } from "@/components/layout/WorkspaceSwitcher";
+import { toast } from "sonner";
+import { api, errorMessage } from "@/lib/api-client";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -46,12 +48,12 @@ export function CommandPalette({ workspaces, activeWorkspaceId, hideTrigger }: P
 
   async function switchWorkspace(id: string) {
     setOpen(false);
-    await fetch("/api/workspaces/active", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspaceId: id }),
-    });
-    router.refresh();
+    try {
+      await api("/api/workspaces/active", { method: "POST", json: { workspaceId: id } });
+      router.refresh();
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao trocar de workspace"));
+    }
   }
 
   if (!open) {

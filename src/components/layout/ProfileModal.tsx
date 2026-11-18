@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 import { X, LogOut, Loader2, User } from "lucide-react";
 import { initials } from "@/lib/utils";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Props {
   user: {
@@ -33,19 +34,14 @@ export function ProfileModal({ user, workspaceName, onClose }: Props) {
   const dirty = name.trim() !== (user.name ?? "") || jobTitle.trim() !== (user.jobTitle ?? "");
 
   async function handleSave() {
-    if (!name.trim()) return;
+    if (!name.trim() || saving) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), jobTitle: jobTitle.trim() || null }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/me", { method: "PATCH", json: { name: name.trim(), jobTitle: jobTitle.trim() || null } });
       toast.success("Perfil atualizado!");
       router.refresh();
-    } catch {
-      toast.error("Erro ao atualizar perfil");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao atualizar perfil"));
     } finally {
       setSaving(false);
     }

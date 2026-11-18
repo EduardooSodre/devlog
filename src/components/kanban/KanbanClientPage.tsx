@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
 import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock } from "lucide-react";
+import { api, errorMessage } from "@/lib/api-client";
 import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
 import { CardModal } from "./CardModal";
@@ -68,6 +69,9 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
+  // Trava duplo envio (Enter repetido / clique duplo) na criação de board e coluna.
+  const [savingBoard, setSavingBoard] = useState(false);
+  const [savingColumn, setSavingColumn] = useState(false);
   const [showBoardSettings, setShowBoardSettings] = useState(false);
   const [showBoardSwitcher, setShowBoardSwitcher] = useState(false);
   const [view, setView] = useState<ViewId>("board");
@@ -153,22 +157,15 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
 
   // ── Create board ──
   async function handleCreateBoard() {
-    if (!newBoardName.trim()) return;
+    if (!newBoardName.trim() || savingBoard) return;
+    setSavingBoard(true);
     try {
       const isPersonal = newBoardMode === "personal";
       const departmentId = isPersonal || newBoardMode === "workspace" ? undefined : newBoardMode;
-      const res = await fetch("/api/kanban/boards", {
+      const { data } = await api<{ data: KanbanBoardWithColumns }>("/api/kanban/boards", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newBoardName.trim(),
-          workspaceId,
-          isPersonal,
-          departmentId,
-        }),
+        json: { name: newBoardName.trim(), workspaceId, isPersonal, departmentId },
       });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
       const newBoard = { ...data, columns: [] };
       setBoards((b) => [newBoard, ...b]);
       setActiveBoard(newBoard);
@@ -177,30 +174,24 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
       setCreatingBoard(false);
       setShowBoardSwitcher(false);
       toast.success("Board criado!");
-    } catch {
-      toast.error("Erro ao criar board");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao criar board"));
+    } finally {
+      setSavingBoard(false);
     }
   }
 
   // ── Create card ──
   async function handleCreateCard(columnId: string) {
-    if (!newCardTitle.trim() || !activeBoard) return;
+    if (!newCardTitle.trim() || !activeBoard || loadingCard) return;
     setLoadingCard(true);
     try {
       const column = activeBoard.columns.find((c) => c.id === columnId);
       const order = (column?.cards?.length ?? 0);
-      const res = await fetch("/api/kanban/cards", {
+      const { data } = await api<{ data: KanbanCardWithDetails }>("/api/kanban/cards", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newCardTitle.trim(),
-          columnId,
-          boardId: activeBoard.id,
-          order,
-        }),
+        json: { title: newCardTitle.trim(), columnId, boardId: activeBoard.id, order },
       });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
 
       setBoards((prev) =>
         prev.map((b) =>
@@ -232,8 +223,8 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
       setAddingCardToColumn(null);
       setSelectedCard(data); // abre o dialog para completar detalhes, anexos e responsável
       toast.success("Card criado!");
-    } catch {
-      toast.error("Erro ao criar card");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao criar card"));
     } finally {
       setLoadingCard(false);
     }
@@ -252,7 +243,9 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
       if (source.droppableId === destination.droppableId && source.index === destination.index)
         return;
 
-      // Optimistic update
+      // Optimistic update (guarda o estado anterior pra desfazer se o servidor recusar)
+      const previousColumns = activeBoard.columns;
+      const boardId = activeBoard.id;
       const newColumns = activeBoard.columns.map((col) => ({ ...col, cards: [...(col.cards ?? [])] }));
       const srcCol = newColumns.find((c) => c.id === source.droppableId)!;
       const dstCol = newColumns.find((c) => c.id === destination.droppableId)!;
@@ -275,17 +268,18 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
 
       // Persist
       try {
-        await fetch("/api/kanban/cards", {
+        await api("/api/kanban/cards", {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          json: {
             id: draggableId,
             columnId: destination.droppableId,
             order: realDstIndex === -1 ? dstCol.cards.length - 1 : realDstIndex,
-          }),
+          },
         });
-      } catch {
-        toast.error("Erro ao mover card");
+      } catch (err) {
+        setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, columns: previousColumns } : b)));
+        setActiveBoard((prev) => (prev && prev.id === boardId ? { ...prev, columns: previousColumns } : prev));
+        toast.error(errorMessage(err, "Erro ao mover card"));
       }
     },
     [activeBoard, boardColumns]
@@ -318,8 +312,7 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
   async function handleCardDelete(cardId: string, opts?: { skipServerDelete?: boolean }) {
     try {
       if (!opts?.skipServerDelete) {
-        const res = await fetch(`/api/kanban/cards?id=${cardId}`, { method: "DELETE" });
-        if (!res.ok) throw new Error();
+        await api(`/api/kanban/cards?id=${cardId}`, { method: "DELETE" });
       }
 
       setBoards((prev) =>
@@ -344,26 +337,20 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
       );
       setSelectedCard(null);
       if (!opts?.skipServerDelete) toast.success("Tarefa excluída");
-    } catch {
-      toast.error("Erro ao excluir tarefa");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir tarefa"));
     }
   }
 
   // ── Column CRUD ──
   async function handleCreateColumn() {
-    if (!newColumnName.trim() || !activeBoard) return;
+    if (!newColumnName.trim() || !activeBoard || savingColumn) return;
+    setSavingColumn(true);
     try {
-      const res = await fetch("/api/kanban/columns", {
+      const { data } = await api<{ data: KanbanColumnWithCards }>("/api/kanban/columns", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newColumnName.trim(),
-          boardId: activeBoard.id,
-          order: activeBoard.columns.length,
-        }),
+        json: { name: newColumnName.trim(), boardId: activeBoard.id, order: activeBoard.columns.length },
       });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
 
       const updatedBoard = { ...activeBoard, columns: [...activeBoard.columns, { ...data, cards: [] }] };
       setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? updatedBoard : b)));
@@ -371,23 +358,24 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
       setNewColumnName("");
       setCreatingColumn(false);
       toast.success("Coluna criada!");
-    } catch {
-      toast.error("Erro ao criar coluna");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao criar coluna"));
+    } finally {
+      setSavingColumn(false);
     }
   }
 
   async function handleDeleteColumn(columnId: string) {
     if (!confirm("Excluir coluna e todas as suas tarefas?")) return;
     try {
-      const res = await fetch(`/api/kanban/columns?id=${columnId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      await api(`/api/kanban/columns?id=${columnId}`, { method: "DELETE" });
 
       const updatedBoard = { ...activeBoard!, columns: activeBoard!.columns.filter((c) => c.id !== columnId) };
       setBoards((prev) => prev.map((b) => (b.id === activeBoard!.id ? updatedBoard : b)));
       setActiveBoard(updatedBoard);
       toast.success("Coluna excluída");
-    } catch {
-      toast.error("Erro ao excluir coluna");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir coluna"));
     }
   }
 
@@ -395,43 +383,41 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
   async function handleDeleteBoard() {
     if (!activeBoard || !confirm("Excluir este board permanentemente?")) return;
     try {
-      const res = await fetch(`/api/kanban/boards?id=${activeBoard.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
+      await api(`/api/kanban/boards?id=${activeBoard.id}`, { method: "DELETE" });
 
       toast.success("Board excluído");
       const updatedBoards = boards.filter((b) => b.id !== activeBoard.id);
       setBoards(updatedBoards);
       setActiveBoard(updatedBoards[0] || null);
       setShowBoardSettings(false);
-    } catch {
-      toast.error("Erro ao excluir board");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir board"));
     }
   }
 
-  async function handleUpdateBoard(updates: { name?: string; color?: string }) {
-    if (!activeBoard) return;
+  /** true se salvou — quem chama só fecha o editor no sucesso (no erro mantém o que foi digitado). */
+  async function handleUpdateBoard(updates: { name?: string; color?: string }): Promise<boolean> {
+    if (!activeBoard) return false;
     try {
-      const res = await fetch("/api/kanban/boards", {
+      const { data } = await api<{ data: Partial<KanbanBoardWithColumns> }>("/api/kanban/boards", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activeBoard.id, ...updates }),
+        json: { id: activeBoard.id, ...updates },
       });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
 
       const updatedBoard = { ...activeBoard, ...data };
       setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? updatedBoard : b)));
       setActiveBoard(updatedBoard);
       toast.success("Board atualizado");
-    } catch {
-      toast.error("Erro ao atualizar board");
+      return true;
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao atualizar board"));
+      return false;
     }
   }
 
   async function handleSaveBoardEdit() {
     if (!editBoardName.trim()) return;
-    await handleUpdateBoard({ name: editBoardName.trim(), color: editBoardColor });
-    setEditingBoard(false);
+    if (await handleUpdateBoard({ name: editBoardName.trim(), color: editBoardColor })) setEditingBoard(false);
   }
 
   async function handleChangeBoardVisibility(mode: string) {
@@ -439,39 +425,29 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
     const isPersonal = mode === "personal";
     const departmentId = isPersonal || mode === "workspace" ? null : mode;
     try {
-      const res = await fetch("/api/kanban/boards", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activeBoard.id, isPersonal, departmentId }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/kanban/boards", { method: "PATCH", json: { id: activeBoard.id, isPersonal, departmentId } });
       const updatedBoard = { ...activeBoard, isPersonal, departmentId };
       setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? updatedBoard : b)));
       setActiveBoard(updatedBoard);
       toast.success(
         isPersonal ? "Board agora é pessoal" : departmentId ? "Board restrito ao departamento" : "Board visível para todo o workspace"
       );
-    } catch {
-      toast.error("Erro ao alterar acesso do board");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao alterar acesso do board"));
     }
   }
 
   async function handleArchiveBoard() {
     if (!activeBoard) return;
     try {
-      const res = await fetch("/api/kanban/boards", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activeBoard.id, isArchived: true }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/kanban/boards", { method: "PATCH", json: { id: activeBoard.id, isArchived: true } });
       toast.success("Board arquivado");
       const updatedBoards = boards.filter((b) => b.id !== activeBoard.id);
       setBoards(updatedBoards);
       setActiveBoard(updatedBoards[0] || null);
       setShowBoardSettings(false);
-    } catch {
-      toast.error("Erro ao arquivar board");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao arquivar board"));
     }
   }
 
@@ -570,8 +546,10 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleCreateBoard}
-                          className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-lg hover:bg-primary/90 transition-colors"
+                          disabled={savingBoard || !newBoardName.trim()}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white text-xs font-semibold py-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                         >
+                          {savingBoard && <Loader2 className="w-3 h-3 animate-spin" />}
                           Criar
                         </button>
                         <button
@@ -833,8 +811,10 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateColumn}
-                      className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-xl hover:bg-primary/90 transition-colors"
+                      disabled={savingColumn || !newColumnName.trim()}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white text-xs font-semibold py-2 rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
+                      {savingColumn && <Loader2 className="w-3 h-3 animate-spin" />}
                       Adicionar
                     </button>
                     <button

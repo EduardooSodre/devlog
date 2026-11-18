@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Crown, Loader2, Mail, Users, X } from "lucide-react";
 import { initials } from "@/lib/utils";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface DeptOption {
   id: string;
@@ -54,7 +55,7 @@ export function BoardAccessPanel({ boardId, isPersonal, departmentId, department
   useEffect(load, [boardId]);
 
   async function handleAdd() {
-    if (!email.trim()) return;
+    if (!email.trim() || adding) return;
     setAdding(true);
     setPendingLink(null);
     try {
@@ -86,10 +87,11 @@ export function BoardAccessPanel({ boardId, isPersonal, departmentId, department
   async function handleRemove(userId: string) {
     const prev = members;
     setMembers((m) => m.filter((p) => p.id !== userId));
-    const res = await fetch(`/api/kanban/boards/members?boardId=${boardId}&userId=${userId}`, { method: "DELETE" });
-    if (!res.ok) {
+    try {
+      await api(`/api/kanban/boards/members?boardId=${boardId}&userId=${userId}`, { method: "DELETE" });
+    } catch (err) {
       setMembers(prev);
-      toast.error("Erro ao remover");
+      toast.error(errorMessage(err, "Erro ao remover"));
     }
   }
 

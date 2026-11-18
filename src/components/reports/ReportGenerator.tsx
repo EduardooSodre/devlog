@@ -9,12 +9,14 @@ import { todayInBrasilia, addDaysToDateStr } from "@/lib/date-brasilia";
 import { PERIOD_OPTIONS, rangeFor, type PeriodKind } from "@/lib/report-period";
 import { ReportPreview, type ReportPayload } from "@/components/reports/ReportPreview";
 import { formatDateOnly } from "@/lib/report-labels";
+import { api, errorMessage } from "@/lib/api-client";
 
 export type SavedReportItem = { id: string; periodStart: string; periodEnd: string; aiUsed: boolean; createdAt: string };
 
 export function ReportGenerator({ workspaceId, saved }: { workspaceId: string; saved: SavedReportItem[] }) {
   const router = useRouter();
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const today = todayInBrasilia();
   const [period, setPeriod] = useState<PeriodKind>("week");
   const [customStart, setCustomStart] = useState(addDaysToDateStr(today, -6));
@@ -32,6 +34,7 @@ export function ReportGenerator({ workspaceId, saved }: { workspaceId: string; s
   }, []);
 
   async function handleGenerate() {
+    if (generating) return;
     const { start, end } = rangeFor(period, today, customStart, customEnd);
     if (start > end) {
       toast.error("Data inicial não pode ser depois da data final");
@@ -40,21 +43,18 @@ export function ReportGenerator({ workspaceId, saved }: { workspaceId: string; s
 
     setGenerating(true);
     try {
-      const res = await fetch("/api/reports/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, start, end, useAI: useAI && !!aiStatus?.configured }),
-      });
-      if (!res.ok) throw new Error();
-      const json: ReportPayload & { aiUsed: boolean; aiRemainingToday: number; savedId: string | null } = await res.json();
+      const json = await api<ReportPayload & { aiUsed: boolean; aiRemainingToday: number; savedId: string | null }>(
+        "/api/reports/generate",
+        { method: "POST", json: { workspaceId, start, end, useAI: useAI && !!aiStatus?.configured } }
+      );
       setReport(json);
       if (useAI && !json.aiUsed) {
         toast.info("Relatório gerado sem IA — limite diário já utilizado");
       }
       setAiStatus((prev) => (prev ? { ...prev, remaining: json.aiRemainingToday } : prev));
       router.refresh(); // atualiza a lista de relatórios salvos
-    } catch {
-      toast.error("Erro ao gerar relatório");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao gerar relatório"));
     } finally {
       setGenerating(false);
     }
@@ -76,10 +76,16 @@ export function ReportGenerator({ workspaceId, saved }: { workspaceId: string; s
   }
 
   async function deleteSaved(id: string) {
-    if (!confirm("Apagar este relatório salvo?")) return;
-    const res = await fetch(`/api/reports/saved/${id}`, { method: "DELETE" });
-    if (!res.ok) return toast.error("Erro ao apagar");
-    router.refresh();
+    if (deletingId || !confirm("Apagar este relatório salvo?")) return;
+    setDeletingId(id);
+    try {
+      await api(`/api/reports/saved/${id}`, { method: "DELETE" });
+      router.refresh();
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao apagar"));
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   return (
@@ -200,8 +206,8 @@ export function ReportGenerator({ workspaceId, saved }: { workspaceId: string; s
                 >
                   {openingId === r.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FolderOpen className="w-3.5 h-3.5" />} Abrir
                 </button>
-                <button onClick={() => deleteSaved(r.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-background" title="Apagar">
-                  <Trash2 className="w-4 h-4" />
+                <button onClick={() => deleteSaved(r.id)} disabled={deletingId !== null} className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-background disabled:opacity-50" title="Apagar">
+                  {deletingId === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 </button>
               </li>
             ))}

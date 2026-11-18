@@ -10,6 +10,7 @@ import {
 import { cn, priorityConfig, difficultyConfig, formatDate, formatDateTime, initials } from "@/lib/utils";
 import type { CardSubtaskWithDetails, KanbanCardWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { api, errorMessage } from "@/lib/api-client";
 import { AssigneeSelect } from "./AssigneeSelect";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
 import { useSession } from "next-auth/react";
@@ -73,6 +74,8 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
   const canWork = canWorkOnCard(currentUserId, card, currentUserRole);
   const lockedClass = canManage ? "" : "pointer-events-none opacity-70";
   const [title, setTitle] = useState(card.title);
+  const [linkingProject, setLinkingProject] = useState(false);
+  const [deletingCard, setDeletingCard] = useState(false);
   const [description, setDescription] = useState(card.description ?? "");
   const [priority, setPriority] = useState(card.priority);
   const [difficulty, setDifficulty] = useState(card.difficulty);
@@ -193,10 +196,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     try {
       const uploaded = await uploadToCloudinary(file);
 
-      const res = await fetch("/api/kanban/cards/attachments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data } = await api<{ data: any }>("/api/kanban/cards/attachments", { method: "POST", json: {
           cardId: card.id,
           type: "screenshot",
           fileName: uploaded.originalFilename || file.name,
@@ -204,16 +204,12 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
           fileKey: uploaded.publicId,
           fileSize: uploaded.bytes,
           mimeType: file.type,
-        }),
-      });
-
-      if (!res.ok) throw new Error();
-      const { data } = await res.json();
+        } });
       setAttachments((prev) => [...prev, data]);
       toast.success("Imagem anexada!");
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast.error(err.message ?? "Erro no upload");
+      toast.error(errorMessage(err, "Erro no upload"));
     } finally {
       setUploading(false);
     }
@@ -233,10 +229,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
   async function handleSave() {
     setSaving(true);
     try {
-      const res = await fetch("/api/kanban/cards", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data } = await api<{ data: any }>("/api/kanban/cards", { method: "PATCH", json: {
           id: card.id,
           title,
           description,
@@ -245,15 +238,12 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
           startDate: startDate || null,
           dueDate: dueDate || null,
           assignedToId: assignedToId || null,
-        }),
-      });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
+        } });
       const assignedTo = members.find((m) => m.id === assignedToId) ?? null;
       onUpdate({ ...card, ...data, attachments, comments, subtasks, linkedBoards, assignedTo });
       toast.success("Card salvo!");
-    } catch {
-      toast.error("Erro ao salvar card");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao salvar card"));
     } finally {
       setSaving(false);
     }
@@ -262,38 +252,32 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
   async function handleComplete() {
     setCompleting(true);
     try {
-      const res = await fetch("/api/kanban/cards", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const { data } = await api<{ data: any }>("/api/kanban/cards", { method: "PATCH", json: {
           id: card.id,
           status: isDone ? "todo" : "done",
           completionNotes: isDone ? "" : completionNotes,
           completedAt: isDone ? null : new Date().toISOString(),
-        }),
-      });
-      const { data } = await res.json();
-      if (!res.ok) throw new Error();
+        } });
       onUpdate({ ...card, ...data, attachments, comments, subtasks, linkedBoards });
       toast.success(isDone ? "Card reaberto!" : "Card concluído! 🎉");
-    } catch {
-      toast.error("Erro ao atualizar status");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao atualizar status"));
     } finally {
       setCompleting(false);
     }
   }
 
   async function handleDelete() {
-    if (!confirm("Tem certeza que deseja excluir esta tarefa?")) return;
+    if (deletingCard || !confirm("Tem certeza que deseja excluir esta tarefa?")) return;
+    setDeletingCard(true);
     try {
-      const res = await fetch(`/api/kanban/cards?id=${card.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error();
+      await api(`/api/kanban/cards?id=${card.id}`, { method: "DELETE" });
       onDelete(card.id, { skipServerDelete: true });
       toast.success("Card excluído");
-    } catch {
-      toast.error("Erro ao excluir card");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir card"));
+    } finally {
+      setDeletingCard(false);
     }
   }
 
@@ -303,17 +287,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     if (!newComment.trim()) return;
     setPostingComment(true);
     try {
-      const res = await fetch("/api/kanban/cards/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId: card.id, content: newComment.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      const { data } = await res.json();
+      const { data } = await api<{ data: any }>("/api/kanban/cards/comments", { method: "POST", json: { cardId: card.id, content: newComment.trim() } });
       setComments((prev) => [...prev, data]);
       setNewComment("");
-    } catch {
-      toast.error("Erro ao enviar comentário");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao enviar comentário"));
     } finally {
       setPostingComment(false);
     }
@@ -323,17 +301,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     if (!newSubtask.trim()) return;
     setAddingSubtask(true);
     try {
-      const res = await fetch("/api/kanban/cards/subtasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId: card.id, title: newSubtask.trim(), order: subtasks.length }),
-      });
-      if (!res.ok) throw new Error();
-      const { data } = await res.json();
+      const { data } = await api<{ data: any }>("/api/kanban/cards/subtasks", { method: "POST", json: { cardId: card.id, title: newSubtask.trim(), order: subtasks.length } });
       setSubtasks((prev) => [...prev, data]);
       setNewSubtask("");
-    } catch {
-      toast.error("Erro ao adicionar subtarefa");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao adicionar subtarefa"));
     } finally {
       setAddingSubtask(false);
     }
@@ -342,15 +314,10 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
   async function handleToggleSubtask(subtaskId: string, isDone: boolean) {
     setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, isDone } : s)));
     try {
-      const res = await fetch("/api/kanban/cards/subtasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: subtaskId, isDone }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
+      await api("/api/kanban/cards/subtasks", { method: "PATCH", json: { id: subtaskId, isDone } });
+    } catch (err) {
       setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, isDone: !isDone } : s)));
-      toast.error("Erro ao atualizar subtarefa");
+      toast.error(errorMessage(err, "Erro ao atualizar subtarefa"));
     }
   }
 
@@ -358,11 +325,10 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     const prev = subtasks;
     setSubtasks((p) => p.filter((s) => s.id !== subtaskId));
     try {
-      const res = await fetch(`/api/kanban/cards/subtasks?id=${subtaskId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-    } catch {
+      await api(`/api/kanban/cards/subtasks?id=${subtaskId}`, { method: "DELETE" });
+    } catch (err) {
       setSubtasks(prev);
-      toast.error("Erro ao excluir subtarefa");
+      toast.error(errorMessage(err, "Erro ao excluir subtarefa"));
     }
   }
 
@@ -371,16 +337,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     const assignedTo = members.find((m) => m.id === userId) ?? null;
     setSubtasks((p) => p.map((s) => (s.id === subtaskId ? { ...s, assignedToId: userId || null, assignedTo } : s)));
     try {
-      const res = await fetch("/api/kanban/cards/subtasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: subtaskId, assignedToId: userId || null }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/kanban/cards/subtasks", { method: "PATCH", json: { id: subtaskId, assignedToId: userId || null } });
       if (userId) toast.success("Responsável notificado!");
-    } catch {
+    } catch (err) {
       setSubtasks(prev);
-      toast.error("Erro ao definir responsável");
+      toast.error(errorMessage(err, "Erro ao definir responsável"));
     }
   }
 
@@ -388,15 +349,10 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     const prev = subtasks;
     setSubtasks((p) => p.map((s) => (s.id === subtaskId ? { ...s, dueDate: value ? new Date(`${value}T00:00:00`) : null } : s)));
     try {
-      const res = await fetch("/api/kanban/cards/subtasks", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: subtaskId, dueDate: value || null }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
+      await api("/api/kanban/cards/subtasks", { method: "PATCH", json: { id: subtaskId, dueDate: value || null } });
+    } catch (err) {
       setSubtasks(prev);
-      toast.error("Erro ao definir prazo");
+      toast.error(errorMessage(err, "Erro ao definir prazo"));
     }
   }
 
@@ -404,36 +360,29 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     const next = visibility === "private" ? "public" : "private";
     setSavingVisibility(true);
     try {
-      const res = await fetch("/api/kanban/cards", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: card.id, visibility: next }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/kanban/cards", { method: "PATCH", json: { id: card.id, visibility: next } });
       setVisibility(next);
       onUpdate({ ...card, visibility: next, attachments, comments, subtasks, linkedBoards });
       toast.success(next === "public" ? "Tarefa pública" : "Tarefa privada");
-    } catch {
-      toast.error("Erro ao alterar visibilidade");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao alterar visibilidade"));
     } finally {
       setSavingVisibility(false);
     }
   }
 
   async function handleAddProject(boardId: string) {
-    setShowProjectDropdown(false);
-    setProjectSearch("");
+    if (linkingProject) return;
+    setLinkingProject(true);
     try {
-      const res = await fetch("/api/kanban/cards/boards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cardId: card.id, boardId }),
-      });
-      if (!res.ok) throw new Error();
-      const { data: board } = await res.json();
+      const { data: board } = await api<{ data: any }>("/api/kanban/cards/boards", { method: "POST", json: { cardId: card.id, boardId } });
       setLinkedBoards((prev) => [...prev, { cardId: card.id, boardId, createdAt: new Date(), board }]);
-    } catch {
-      toast.error("Erro ao vincular projeto");
+      setShowProjectDropdown(false);
+      setProjectSearch("");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao vincular projeto"));
+    } finally {
+      setLinkingProject(false);
     }
   }
 
@@ -441,11 +390,10 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     const prev = linkedBoards;
     setLinkedBoards((p) => p.filter((lb) => lb.boardId !== boardId));
     try {
-      const res = await fetch(`/api/kanban/cards/boards?cardId=${card.id}&boardId=${boardId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-    } catch {
+      await api(`/api/kanban/cards/boards?cardId=${card.id}&boardId=${boardId}`, { method: "DELETE" });
+    } catch (err) {
       setLinkedBoards(prev);
-      toast.error("Erro ao remover projeto");
+      toast.error(errorMessage(err, "Erro ao remover projeto"));
     }
   }
 
@@ -1115,7 +1063,8 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
             {canManage && (
               <button
                 onClick={handleDelete}
-                className="p-2 rounded-lg hover:bg-red-400/10 text-muted-foreground hover:text-red-400 transition-colors"
+                disabled={deletingCard}
+                className="p-2 rounded-lg hover:bg-red-400/10 text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-50"
                 title="Excluir card"
               >
                 <Trash2 className="w-4 h-4" />

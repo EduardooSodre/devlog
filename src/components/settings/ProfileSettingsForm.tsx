@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Props {
   user: {
@@ -19,21 +20,15 @@ export function ProfileSettingsForm({ user }: Props) {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!name.trim()) return;
+    if (!name.trim() || saving) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-
-      if (!res.ok) throw new Error();
+      await api("/api/me", { method: "PATCH", json: { name: name.trim() } });
 
       toast.success("Perfil atualizado!");
       router.refresh();
-    } catch {
-      toast.error("Erro ao atualizar perfil");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao atualizar perfil"));
     } finally {
       setSaving(false);
     }

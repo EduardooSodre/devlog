@@ -5,6 +5,7 @@ import { X, Download, FileText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { downloadReportPdf } from "@/lib/reports-pdf";
 import { buildReportModel } from "@/lib/report-model";
+import { ApiError, errorMessage } from "@/lib/api-client";
 
 export type ReportCard = {
   id: string;
@@ -50,6 +51,7 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
   const { data } = report;
 
   async function handleWord() {
+    if (busy) return;
     setBusy("word");
     try {
       const res = await fetch("/api/reports/export/docx", {
@@ -57,21 +59,25 @@ export function ReportPreview({ report, onClose }: { report: ReportPayload; onCl
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(report),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new ApiError(typeof json?.error === "string" ? json.error : "", res.status);
+      }
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement("a");
       a.href = url;
       a.download = `relatorio_${data.period.start}_a_${data.period.end}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Erro ao gerar Word");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao gerar Word"));
     } finally {
       setBusy(null);
     }
   }
 
   async function handlePdf() {
+    if (busy) return;
     setBusy("pdf");
     try {
       await downloadReportPdf(report);

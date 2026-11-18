@@ -11,6 +11,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
+import { api, errorMessage } from "@/lib/api-client";
 
 const docTypes = [
   { key: "refactoring", label: "Refatoração", desc: "Antes & depois de código", icon: <Wrench className="w-4 h-4" />, color: "text-purple-400", bg: "bg-purple-400/10", border: "border-purple-400/30" },
@@ -78,6 +79,7 @@ export function NewDocForm({ workspaceId }: { workspaceId: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     if (!title.trim()) {
       toast.error("Título é obrigatório");
       return;
@@ -85,20 +87,17 @@ export function NewDocForm({ workspaceId }: { workspaceId: string }) {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/docs", {
+      const { data } = await api<{ data: { id: string } }>("/api/docs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), summary, content, type, workspaceId }),
+        json: { title: title.trim(), summary, content, type, workspaceId },
       });
 
-      const { data, error } = await res.json();
-      if (!res.ok) throw new Error(typeof error === "string" ? error : "Erro ao salvar");
-
       const docId = data.id;
+      let failed = 0;
 
       for (const img of images) {
         if (!img.url) continue;
-        await fetch("/api/docs/attachments", {
+        const ok = await fetch("/api/docs/attachments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -110,14 +109,16 @@ export function NewDocForm({ workspaceId }: { workspaceId: string }) {
             fileSize: img.fileSize,
             mimeType: img.mimeType,
           }),
-        });
+        }).then((r) => r.ok, () => false);
+        if (!ok) failed++;
       }
 
       toast.success("Documentação criada!");
+      if (failed > 0) toast.error(`${failed} anexo(s) não puderam ser salvos`);
       router.push(`/docs/${docId}`);
       router.refresh();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Erro ao criar documentação");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao criar documentação"));
     } finally {
       setSaving(false);
     }

@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
+import { api, errorMessage } from "@/lib/api-client";
 
 export function AiLimitForm({ initialLimit }: { initialLimit: number }) {
   const [value, setValue] = useState(String(initialLimit));
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
+    if (saving) return;
     const limit = parseInt(value, 10);
     if (!Number.isFinite(limit) || limit < 1) {
       toast.error("Informe um número maior que zero");
@@ -16,15 +18,10 @@ export function AiLimitForm({ initialLimit }: { initialLimit: number }) {
     }
     setSaving(true);
     try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiReportDailyLimit: limit }),
-      });
-      if (!res.ok) throw new Error();
+      await api("/api/admin/settings", { method: "PUT", json: { aiReportDailyLimit: limit } });
       toast.success("Limite atualizado");
-    } catch {
-      toast.error("Erro ao salvar");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao salvar"));
     } finally {
       setSaving(false);
     }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Trash2, Loader2 } from "lucide-react";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Props {
   docId: string;
@@ -14,23 +15,20 @@ export function DeleteDocButton({ docId }: Props) {
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
+    if (deleting) return;
     if (!confirm("Tem certeza que deseja excluir esta documentação? Esta ação não pode ser desfeita.")) {
       return;
     }
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/docs?id=${docId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) throw new Error();
+      await api(`/api/docs?id=${docId}`, { method: "DELETE" });
 
       toast.success("Documentação excluída com sucesso");
       router.push("/docs");
       router.refresh();
-    } catch (error) {
-      toast.error("Erro ao excluir documentação");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir documentação"));
     } finally {
       setDeleting(false);
     }

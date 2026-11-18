@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { BookOpen, Briefcase, Building2, Check, Loader2, Plus, Sparkles, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { suggestDepartmentName } from "@/lib/job-department";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Department {
   id: string;
@@ -35,6 +36,7 @@ export function OnboardingWizard({ workspaceId, workspaceName, showOrgWelcome }:
   const [creatingDept, setCreatingDept] = useState(false);
   const [newDeptName, setNewDeptName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [createdDeptName, setCreatedDeptName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -67,32 +69,31 @@ export function OnboardingWizard({ workspaceId, workspaceName, showOrgWelcome }:
   const isJoiningExisting = selectedDeptId !== null && !creatingDept;
 
   async function handleFinish() {
+    if (submitting) return;
     setSubmitting(true);
     try {
       let departmentId = selectedDeptId ?? undefined;
 
-      if (creatingDept && newDeptName.trim()) {
-        const res = await fetch("/api/workspaces/departments", {
+      // createdDeptName: se o departamento já foi criado numa tentativa anterior (e o
+      // onboarding falhou depois), não cria de novo no retry.
+      if (creatingDept && newDeptName.trim() && createdDeptName !== newDeptName.trim()) {
+        await api("/api/workspaces/departments", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, name: newDeptName.trim() }),
+          json: { workspaceId, name: newDeptName.trim() },
         });
-        if (!res.ok) throw new Error();
-        departmentId = undefined; // criar já adiciona o criador como membro
+        setCreatedDeptName(newDeptName.trim());
       }
+      if (creatingDept && newDeptName.trim()) departmentId = undefined; // criar já adiciona o criador como membro
 
-      const res = await fetch("/api/me/onboarding", {
+      const json = await api<{ joinRequested?: boolean }>("/api/me/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobTitle: jobTitle.trim() || undefined, departmentId }),
+        json: { jobTitle: jobTitle.trim() || undefined, departmentId },
       });
-      if (!res.ok) throw new Error();
-      const json = await res.json();
 
-      toast.success(json.joinRequested ? "Pedido de entrada enviado!" : "Tudo pronto!");
+      toast.success(json?.joinRequested ? "Pedido de entrada enviado!" : "Tudo pronto!");
       router.refresh();
-    } catch {
-      toast.error("Erro ao concluir. Tente de novo.");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao concluir. Tente de novo."));
       setSubmitting(false);
     }
   }

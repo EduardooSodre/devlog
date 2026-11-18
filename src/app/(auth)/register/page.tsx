@@ -31,6 +31,7 @@ function RegisterForm() {
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     if (password.length < 8) {
       toast.error("Senha deve ter no mínimo 8 caracteres");
       return;
@@ -51,7 +52,13 @@ function RegisterForm() {
       }
 
       // Auto-login após registro
-      await signIn("credentials", { email, password, redirect: false });
+      const result = await signIn("credentials", { email, password, redirect: false });
+      if (result?.error) {
+        toast.success("Conta criada! Faça login para continuar.");
+        // Mantém o callbackUrl — quem veio de um link de convite volta pra ele depois do login.
+        router.push(callbackUrl === "/dashboard" ? "/login" : `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+        return;
+      }
       router.push(callbackUrl);
       router.refresh();
     } catch {

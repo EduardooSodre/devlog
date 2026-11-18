@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Notification {
   id: string;
@@ -49,13 +51,17 @@ export function NotificationBell({ collapsed }: { collapsed?: boolean }) {
   }, []);
 
   async function markAllRead() {
+    const prevItems = items;
+    const prevCount = unreadCount;
     setUnreadCount(0);
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-    await fetch("/api/me/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ all: true }),
-    });
+    try {
+      await api("/api/me/notifications", { method: "PATCH", json: { all: true } });
+    } catch (err) {
+      setItems(prevItems);
+      setUnreadCount(prevCount);
+      toast.error(errorMessage(err, "Erro ao marcar notificações como lidas"));
+    }
   }
 
   async function handleClick(n: Notification) {

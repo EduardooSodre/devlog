@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Check, Loader2, Plus, Trash2, X } from "lucide-react";
 import { initials } from "@/lib/utils";
+import { api, errorMessage } from "@/lib/api-client";
 
 interface Member {
   id: string;
@@ -45,6 +46,7 @@ export function DepartmentsForm({ workspaceId, currentUserId }: Props) {
   const [loading, setLoading] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<JoinRequest[]>([]);
   const [myRequests, setMyRequests] = useState<MyRequest[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   function load() {
     fetch(`/api/workspaces/departments?workspaceId=${workspaceId}`)
@@ -73,36 +75,34 @@ export function DepartmentsForm({ workspaceId, currentUserId }: Props) {
   useEffect(load, [workspaceId]);
 
   async function decideRequest(id: string, action: "approve" | "reject") {
-    const res = await fetch("/api/workspaces/departments/join-requests", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
-    });
-    if (!res.ok) {
-      toast.error("Erro ao processar pedido");
-      return;
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      await api("/api/workspaces/departments/join-requests", { method: "PATCH", json: { id, action } });
+      toast.success(action === "approve" ? "Pedido aprovado" : "Pedido recusado");
+      load();
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao processar pedido"));
+    } finally {
+      setBusyId(null);
     }
-    toast.success(action === "approve" ? "Pedido aprovado" : "Pedido recusado");
-    load();
   }
 
   async function handleCreate() {
-    if (!name.trim()) return;
+    if (!name.trim() || loading) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/workspaces/departments", {
+      await api("/api/workspaces/departments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, name: name.trim(), memberIds: [...selected] }),
+        json: { workspaceId, name: name.trim(), memberIds: [...selected] },
       });
-      if (!res.ok) throw new Error();
       toast.success("Departamento criado!");
       setName("");
       setSelected(new Set());
       setCreating(false);
       load();
-    } catch {
-      toast.error("Erro ao criar departamento");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao criar departamento"));
     } finally {
       setLoading(false);
     }
@@ -110,8 +110,17 @@ export function DepartmentsForm({ workspaceId, currentUserId }: Props) {
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este departamento? Boards restritos a ele voltam a ser visíveis para o workspace inteiro.")) return;
-    await fetch(`/api/workspaces/departments?id=${id}`, { method: "DELETE" });
-    load();
+    if (busyId) return;
+    setBusyId(id);
+    try {
+      await api(`/api/workspaces/departments?id=${id}`, { method: "DELETE" });
+      toast.success("Departamento excluído");
+      load();
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao excluir departamento"));
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function toggleMember(id: string) {
@@ -156,14 +165,16 @@ export function DepartmentsForm({ workspaceId, currentUserId }: Props) {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => decideRequest(r.id, "approve")}
-                    className="p-1.5 rounded-lg text-green-500 hover:bg-green-500/10 transition-colors"
+                    disabled={busyId !== null}
+                    className="p-1.5 rounded-lg text-green-500 hover:bg-green-500/10 disabled:opacity-50 transition-colors"
                     title="Aprovar"
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => decideRequest(r.id, "reject")}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    disabled={busyId !== null}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
                     title="Recusar"
                   >
                     <X className="w-4 h-4" />
@@ -201,7 +212,8 @@ export function DepartmentsForm({ workspaceId, currentUserId }: Props) {
             {dept.createdById === currentUserId && (
               <button
                 onClick={() => handleDelete(dept.id)}
-                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                disabled={busyId !== null}
+                className="text-muted-foreground hover:text-destructive disabled:opacity-50 transition-colors shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import type { DocEntryWithDetails } from "@/types";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { TipTapEditor } from "@/components/docs/TipTapEditor";
+import { api, errorMessage } from "@/lib/api-client";
 
 const docTypes = [
   { key: "refactoring", label: "Refatoração", desc: "Antes & depois de código", icon: <Wrench className="w-4 h-4" />, color: "text-purple-400", bg: "bg-purple-400/10", border: "border-purple-400/30" },
@@ -113,6 +114,7 @@ export function EditDocForm({ doc }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     if (!title.trim()) {
       toast.error("Título é obrigatório");
       return;
@@ -121,25 +123,24 @@ export function EditDocForm({ doc }: Props) {
     setSaving(true);
     try {
       // 1. Atualiza a documentação básica
-      const res = await fetch("/api/docs", {
+      await api("/api/docs", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        json: {
           id: doc.id,
           title: title.trim(),
           summary,
           content,
           type,
-        }),
+        },
       });
 
-      const { error } = await res.json();
-      if (!res.ok) throw new Error(error ?? "Erro ao salvar");
+      // Anexos: conta as falhas pra avisar (o doc em si já foi salvo).
+      let failed = 0;
 
       // 2. Identifica e salva novos anexos (que não possuem id)
       const newImages = images.filter((img) => !img.id && img.url);
       for (const img of newImages) {
-        await fetch("/api/docs/attachments", {
+        const ok = await fetch("/api/docs/attachments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -151,7 +152,8 @@ export function EditDocForm({ doc }: Props) {
             fileSize: img.fileSize,
             mimeType: img.mimeType,
           }),
-        });
+        }).then((r) => r.ok, () => false);
+        if (!ok) failed++;
       }
 
       // 3. Identifica e deleta anexos removidos
@@ -160,16 +162,18 @@ export function EditDocForm({ doc }: Props) {
       const deletedIds = existingAttachmentIds.filter((id) => !currentAttachmentIds.includes(id));
 
       for (const id of deletedIds) {
-        await fetch(`/api/docs/attachments?id=${id}`, {
+        const ok = await fetch(`/api/docs/attachments?id=${id}`, {
           method: "DELETE",
-        });
+        }).then((r) => r.ok, () => false);
+        if (!ok) failed++;
       }
 
       toast.success("Documentação atualizada!");
+      if (failed > 0) toast.error(`${failed} anexo(s) não puderam ser salvos ou removidos`);
       router.push(`/docs/${doc.id}`);
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message ?? "Erro ao atualizar documentação");
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao atualizar documentação"));
     } finally {
       setSaving(false);
     }
