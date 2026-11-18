@@ -9,7 +9,7 @@
  */
 
 import { db } from "@/lib/db";
-import { workspaces, workspaceMembers, users, accounts } from "@/lib/db/schema";
+import { workspaces, workspaceMembers, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { slugify } from "@/lib/utils";
 import freeEmailDomains from "free-email-domains";
@@ -33,18 +33,16 @@ export function isCompanyDomain(domain: string): boolean {
 }
 
 /**
- * Domínio corporativo que a pessoa PROVOU ser dela: confirmou o e-mail pelo link ou
- * entrou por OAuth (Google/GitHub já validaram). Mesma regra de invites.ts. Sem essa
- * prova, qualquer um se cadastraria como ceo@empresa.com e se passaria pela empresa.
+ * Domínio corporativo que a pessoa PROVOU ser dela: `emailVerified` preenchido — pelo
+ * link de confirmação ou por OAuth em que o provedor confirmou o e-mail (ver
+ * oauth-email.ts). Só ter conta Google/GitHub não basta. Sem essa prova, qualquer um se
+ * cadastraria como ceo@empresa.com e se passaria pela empresa.
  */
 export async function verifiedCompanyDomain(userId: string): Promise<string | null> {
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-  if (!user) return null;
+  if (!user?.emailVerified) return null;
   const domain = getEmailDomain(user.email);
-  if (!isCompanyDomain(domain)) return null;
-  if (user.emailVerified) return domain;
-  const oauth = await db.query.accounts.findFirst({ where: eq(accounts.userId, userId) });
-  return oauth ? domain : null;
+  return isCompanyDomain(domain) ? domain : null;
 }
 
 /**

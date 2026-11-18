@@ -11,10 +11,10 @@
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq, exists, ilike, isNotNull, notInArray, or } from "drizzle-orm";
+import { and, eq, ilike, isNotNull, notInArray } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { accounts, users, workspaces, workspaceMembers, workspaceRemovals } from "@/lib/db/schema";
+import { users, workspaces, workspaceMembers, workspaceRemovals } from "@/lib/db/schema";
 import { verifiedCompanyDomain } from "@/lib/org-domain";
 import { checkPlanLimit, getUserWorkspaces, verifyWorkspaceAccess } from "@/lib/workspace";
 
@@ -34,11 +34,8 @@ async function listJoinable(userId: string, domain: string) {
         eq(workspaces.isPublic, true),
         // Domínio já validado como corporativo; "%" e "_" não aparecem em domínio de e-mail.
         ilike(users.email, `%@${domain}`),
-        // Owner também provou o domínio.
-        or(
-          isNotNull(users.emailVerified),
-          exists(db.select({ x: accounts.userId }).from(accounts).where(eq(accounts.userId, users.id)))
-        ),
+        // Owner também provou o domínio (link de confirmação ou provedor OAuth que confirmou).
+        isNotNull(users.emailVerified),
         exclude.length > 0 ? notInArray(workspaces.id, exclude) : undefined,
       ),
     );

@@ -111,10 +111,9 @@ export async function DELETE(req: NextRequest) {
   const check = await authorizeTarget(session.user.id, workspaceId, userId);
   if ("error" in check) return NextResponse.json({ error: check.error }, { status: check.status });
 
-  await db
-    .delete(workspaceMembers)
-    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
-  // Registra a remoção: sem isso a pessoa voltava sozinha se o workspace for público.
+  // Registra a remoção ANTES de apagar o vínculo: sem o registro a pessoa voltaria sozinha
+  // por um workspace público, e nessa ordem não existe janela em que ela já saiu mas o
+  // bloqueio ainda não existe. (Driver neon-http não tem transação — a ordem é a garantia.)
   await db
     .insert(workspaceRemovals)
     .values({ workspaceId, userId, removedById: session.user.id })
@@ -122,6 +121,9 @@ export async function DELETE(req: NextRequest) {
       target: [workspaceRemovals.workspaceId, workspaceRemovals.userId],
       set: { removedById: session.user.id, removedAt: new Date() },
     });
+  await db
+    .delete(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
   await onMemberRemoved(workspaceId);
 
   return NextResponse.json({ success: true });

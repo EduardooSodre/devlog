@@ -11,7 +11,8 @@ import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
+import { isEmailVerifiedByProvider } from "./oauth-email";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { users } from "./db/schema";
@@ -78,16 +79,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
 
   events: {
-    // Só dispara para contas criadas via adapter (OAuth) — o cadastro por e-mail/senha
-    // insere direto na tabela `users` e nunca passa por aqui. Isso é o que torna seguro
-    // agrupar por domínio: GitHub/Google já provaram que o usuário é dono do e-mail.
-    async createUser({ user }) {
-      if (!user.id || !user.email) return;
-      const workspaceName = user.name ?? user.email.split("@")[0];
-      await resolveSignupWorkspace(user.id, workspaceName, user.email, true);
-      // A coluna tem default true (pra não afetar quem já existia antes dela existir) —
-      // usuário recém-criado via OAuth precisa do onboarding como qualquer outro.
-      await db.update(users).set({ hasOnboarded: false }).where(eq(users.id, user.id));
+    // Login OAuth (o de credenciais não tem `account` OAuth). Era no `createUser`, que
+    // não recebe o perfil do provedor — e tratava "tem conta Google/GitHub" como prova de
+    // dono do e-mail. Agora só vale o que o provedor confirma (email_verified / verified).
+    async signIn({ user, account, profile, isNewUser }) {
+      if (!user.id || !user.email || !account || account.type !== "oauth" && account.type !== "oidc") return;
+      try {
+        const verified = await isEmailVerifiedByProvider(account, profile, user.email);
+        if (verified) {
+          await db
+            .update(users)
+            .set({ emailVerified: new Date() })
+            .where(and(eq(users.id, user.id), isNull(users.emailVerified)));
+        }
+
+        if (isNewUser) {
+          const workspaceName = user.name ?? user.email.split("@")[0];
+          await resolveSignupWorkspace(user.id, workspaceName, user.email, verified);
+          // A coluna tem default true (pra não afetar quem já existia antes dela existir) —
+          // usuário recém-criado via OAuth precisa do onboarding como qualquer outro.
+          await db.update(users).set({ hasOnboarded: false }).where(eq(users.id, user.id));
+        }
+      } catch (error) {
+        // Nunca derruba o login por causa disso — no pior caso a pessoa fica sem o
+        // agrupamento automático por domínio até o próximo login.
+        console.error("[auth.events.signIn]", error);
+      }
     },
   },
 });

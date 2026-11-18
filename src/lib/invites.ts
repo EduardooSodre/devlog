@@ -16,7 +16,6 @@ import {
   boardMembers,
   workspaces,
   users,
-  accounts,
 } from "@/lib/db/schema";
 import { eq, and, isNull, gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -170,8 +169,9 @@ export async function acceptPendingInvitesForUser(userId: string): Promise<numbe
   });
   if (pending.length === 0) return 0;
 
-  const hasOAuth = await db.query.accounts.findFirst({ where: eq(accounts.userId, userId) });
-  if (!user.emailVerified && !hasOAuth) return 0;
+  // Só e-mail comprovado (link ou provedor OAuth que confirmou) — ter conta Google/GitHub
+  // não prova dono do endereço. Ver oauth-email.ts.
+  if (!user.emailVerified) return 0;
 
   for (const invite of pending) {
     await acceptInvite(invite, userId);
