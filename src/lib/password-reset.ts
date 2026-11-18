@@ -10,7 +10,7 @@ import { users, verificationTokens } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
-import { sendMail, escapeHtml } from "@/lib/mail";
+import { sendMail, escapeHtml, emailButton } from "@/lib/mail";
 
 const TOKEN_TTL_MINUTES = 60;
 const COOLDOWN_MINUTES = 1;
@@ -49,14 +49,10 @@ export async function requestPasswordReset(email: string): Promise<void> {
     to: user.email,
     subject: "Redefinir sua senha no DevLog",
     html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Olá${firstName ? `, ${firstName}` : ""}!</h2>
-        <p>Recebemos um pedido pra redefinir a senha da sua conta no DevLog.</p>
-        <p style="margin: 24px 0;">
-          <a href="${resetUrl}" style="background:#4f6ef7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Redefinir senha</a>
-        </p>
-        <p style="color:#888;font-size:12px;">Este link expira em ${TOKEN_TTL_MINUTES} minutos e só funciona uma vez. Se não foi você, ignore este e-mail — sua senha continua a mesma.</p>
-      </div>
+      <h1 style="margin:0 0 12px;font-size:22px;color:#111827;">Olá${firstName ? `, ${firstName}` : ""}!</h1>
+      <p style="margin:0;">Recebemos um pedido pra redefinir a senha da sua conta no DevLog. Clique no botão abaixo pra escolher uma nova senha.</p>
+      ${emailButton(resetUrl, "Redefinir senha")}
+      <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #f0f1f3;font-size:12px;color:#8a8f98;">Este link expira em ${TOKEN_TTL_MINUTES} minutos e só funciona uma vez. Se não foi você, ignore este e-mail — sua senha continua a mesma.</p>
     `,
   });
 }

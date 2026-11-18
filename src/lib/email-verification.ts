@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 import { users, workspaces, workspaceMembers, verificationTokens } from "@/lib/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { sendMail } from "@/lib/mail";
+import { sendMail, escapeHtml, emailButton } from "@/lib/mail";
 import { getEmailDomain, isCompanyDomain } from "@/lib/org-domain";
 import { getUserWorkspaces, verifyWorkspaceAccess } from "@/lib/workspace";
 
@@ -36,14 +36,10 @@ export async function sendVerificationEmail(email: string, name: string): Promis
     to: email,
     subject: "Confirme seu e-mail no DevLog",
     html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Olá, ${name.split(" ")[0] || name}!</h2>
-        <p>Confirme seu e-mail pra liberar o agrupamento automático com colegas da mesma empresa (se aplicável).</p>
-        <p style="margin: 24px 0;">
-          <a href="${verifyUrl}" style="background:#4f6ef7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Confirmar e-mail</a>
-        </p>
-        <p style="color:#888;font-size:12px;">Este link expira em ${TOKEN_TTL_HOURS}h. Se você não criou essa conta, ignore este e-mail.</p>
-      </div>
+      <h1 style="margin:0 0 12px;font-size:22px;color:#111827;">Olá, ${escapeHtml(name.split(" ")[0] || name)}!</h1>
+      <p style="margin:0;">Confirme seu e-mail pra liberar o agrupamento automático com colegas da mesma empresa (se aplicável).</p>
+      ${emailButton(verifyUrl, "Confirmar e-mail")}
+      <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #f0f1f3;font-size:12px;color:#8a8f98;">Este link expira em ${TOKEN_TTL_HOURS}h. Se você não criou essa conta, ignore este e-mail.</p>
     `,
   });
 }

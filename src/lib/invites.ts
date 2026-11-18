@@ -20,7 +20,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, isNull, gt } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { sendMail, escapeHtml } from "@/lib/mail";
+import { sendMail, escapeHtml, emailButton } from "@/lib/mail";
 import { notifyUser } from "@/lib/notify";
 import { onMemberJoined } from "@/lib/members";
 
@@ -93,14 +93,10 @@ export async function createOrRefreshInvite(opts: {
     to: email,
     subject: `${opts.inviterName} te convidou para ${workspace?.name ?? "o DevLog"}`,
     html: `
-      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2>Você foi convidado(a)!</h2>
-        <p><strong>${escapeHtml(opts.inviterName)}</strong> te convidou para participar de <strong>${escapeHtml(workspace?.name ?? "")}</strong> no DevLog.</p>
-        <p style="margin: 24px 0;">
-          <a href="${inviteUrl}" style="background:#4f6ef7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Aceitar convite</a>
-        </p>
-        <p style="color:#888;font-size:12px;">Ainda não tem conta? O link já leva pro cadastro. Expira em ${INVITE_TTL_DAYS} dias.</p>
-      </div>
+      <h1 style="margin:0 0 12px;font-size:22px;color:#111827;">Você foi convidado(a)!</h1>
+      <p style="margin:0;"><strong>${escapeHtml(opts.inviterName)}</strong> te convidou para participar de <strong>${escapeHtml(workspace?.name ?? "")}</strong> no DevLog.</p>
+      ${emailButton(inviteUrl, "Aceitar convite")}
+      <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #f0f1f3;font-size:12px;color:#8a8f98;">Ainda não tem conta? O link já leva pro cadastro. Expira em ${INVITE_TTL_DAYS} dias.</p>
     `,
   });
 
