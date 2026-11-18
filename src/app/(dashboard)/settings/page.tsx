@@ -102,7 +102,7 @@ export default async function SettingsPage() {
         </div>
         <div className="bg-card border border-border rounded-2xl p-5">
           {workspace ? (
-            <WorkspaceSettingsForm workspace={workspace} />
+            <WorkspaceSettingsForm workspace={workspace} canEdit={isAdmin} isOwner={isOwner} />
           ) : (
             <p className="text-sm text-muted-foreground italic">Nenhum workspace encontrado.</p>
           )}

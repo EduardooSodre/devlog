@@ -148,6 +148,9 @@ export const workspaces = pgTable("workspaces", {
   // Domínio de e-mail corporativo "dono" deste workspace (null = workspace pessoal).
   // Novos cadastros com e-mail do mesmo domínio entram automaticamente aqui.
   domain: text("domain").unique(),
+  // Público: colegas com e-mail verificado do mesmo domínio corporativo do owner veem o
+  // workspace no seletor e entram sozinhos. Privado (padrão): só por convite.
+  isPublic: boolean("is_public").notNull().default(false),
   // Fim do trial gratuito de 30 dias para workspaces vinculados a domínio. Null = sem trial.
   trialEndsAt: timestamp("trial_ends_at", { mode: "date" }),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
