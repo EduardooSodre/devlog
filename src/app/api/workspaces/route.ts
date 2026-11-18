@@ -11,6 +11,10 @@ import {
 } from "@/lib/workspace";
 import { and, eq, inArray } from "drizzle-orm";
 import { cookies } from "next/headers";
+import { verifiedCompanyDomain } from "@/lib/org-domain";
+
+const PUBLIC_NEEDS_VERIFIED =
+  "Workspace público só para e-mail corporativo confirmado (Gmail, Outlook etc. não valem). Confirme seu e-mail ou entre com Google/GitHub.";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 
@@ -51,6 +55,10 @@ export async function POST(req: Request) {
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Dados inválidos" }, { status: 400 });
+    }
+
+    if (parsed.data.isPublic && !(await verifiedCompanyDomain(session.user.id))) {
+      return NextResponse.json({ error: PUBLIC_NEEDS_VERIFIED }, { status: 400 });
     }
 
     // Slug só com [a-z0-9-] — acento e símbolo no nome viravam slug quebrado.
@@ -116,6 +124,14 @@ export async function PATCH(req: Request) {
     const member = await verifyWorkspaceAccess(session.user.id, parsed.data.id);
     if (!isAdminRole(member?.role)) {
       return NextResponse.json({ error: "Só owner ou admin pode renomear o workspace" }, { status: 403 });
+    }
+
+    // "Público" é casado pelo domínio do OWNER — então é o owner que precisa ter provado o domínio.
+    if (parsed.data.isPublic) {
+      const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, parsed.data.id), columns: { ownerId: true } });
+      if (!ws || !(await verifiedCompanyDomain(ws.ownerId))) {
+        return NextResponse.json({ error: PUBLIC_NEEDS_VERIFIED }, { status: 400 });
+      }
     }
 
     const [workspace] = await db

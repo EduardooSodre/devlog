@@ -258,6 +258,25 @@ export const departments = pgTable("departments", {
   createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
 });
 
+// Quem foi removido de um workspace por owner/admin. Só serve pra não deixar a pessoa
+// voltar sozinha por um workspace público — convite continua funcionando normalmente.
+export const workspaceRemovals = pgTable(
+  "workspace_removals",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    removedById: text("removed_by_id").references(() => users.id, { onDelete: "set null" }),
+    removedAt: timestamp("removed_at", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.userId] }),
+  })
+);
+
 export const departmentMembers = pgTable(
   "department_members",
   {

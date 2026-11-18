@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { workspaceMembers, workspaces } from "@/lib/db/schema";
+import { workspaceMembers, workspaces, workspaceRemovals } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { getActiveWorkspaceId, isAdminRole, verifyWorkspaceAccess } from "@/lib/workspace";
@@ -114,6 +114,14 @@ export async function DELETE(req: NextRequest) {
   await db
     .delete(workspaceMembers)
     .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+  // Registra a remoção: sem isso a pessoa voltava sozinha se o workspace for público.
+  await db
+    .insert(workspaceRemovals)
+    .values({ workspaceId, userId, removedById: session.user.id })
+    .onConflictDoUpdate({
+      target: [workspaceRemovals.workspaceId, workspaceRemovals.userId],
+      set: { removedById: session.user.id, removedAt: new Date() },
+    });
   await onMemberRemoved(workspaceId);
 
   return NextResponse.json({ success: true });

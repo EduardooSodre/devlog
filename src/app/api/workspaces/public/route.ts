@@ -4,28 +4,27 @@
  *          ele ainda não é membro)
  *   POST { workspaceId } → entra como "member"
  *
- * Só vale pra e-mail corporativo comprovado: domínio de webmail (gmail etc.) nunca
- * casa, e cadastro por senha precisa ter confirmado o e-mail (OAuth já provou).
+ * Os DOIS lados precisam ter provado o domínio (e-mail confirmado ou OAuth): quem entra
+ * e o owner do workspace. Sem checar o owner, alguém cadastrado por senha como
+ * ceo@empresa.com (sem confirmar) criaria um workspace "da empresa" e atrairia os colegas.
+ * Quem foi removido do workspace não volta sozinho — só por convite.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { and, eq, ilike, notInArray } from "drizzle-orm";
+import { and, eq, exists, ilike, isNotNull, notInArray, or } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users, workspaces, workspaceMembers } from "@/lib/db/schema";
-import { getEmailDomain, isCompanyDomain } from "@/lib/org-domain";
+import { accounts, users, workspaces, workspaceMembers, workspaceRemovals } from "@/lib/db/schema";
+import { verifiedCompanyDomain } from "@/lib/org-domain";
 import { checkPlanLimit, getUserWorkspaces, verifyWorkspaceAccess } from "@/lib/workspace";
-
-async function companyDomainOf(userId: string): Promise<string | null> {
-  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-  if (!user) return null;
-  const verified = user.emailVerified !== null || user.password === null;
-  const domain = getEmailDomain(user.email);
-  return verified && isCompanyDomain(domain) ? domain : null;
-}
 
 async function listJoinable(userId: string, domain: string) {
   const mine = (await getUserWorkspaces(userId)).map((m) => m.workspaceId);
+  const removedFrom = (
+    await db.query.workspaceRemovals.findMany({ where: eq(workspaceRemovals.userId, userId), columns: { workspaceId: true } })
+  ).map((r) => r.workspaceId);
+  const exclude = [...mine, ...removedFrom];
+
   return db
     .select({ id: workspaces.id, name: workspaces.name })
     .from(workspaces)
@@ -35,7 +34,12 @@ async function listJoinable(userId: string, domain: string) {
         eq(workspaces.isPublic, true),
         // Domínio já validado como corporativo; "%" e "_" não aparecem em domínio de e-mail.
         ilike(users.email, `%@${domain}`),
-        mine.length > 0 ? notInArray(workspaces.id, mine) : undefined,
+        // Owner também provou o domínio.
+        or(
+          isNotNull(users.emailVerified),
+          exists(db.select({ x: accounts.userId }).from(accounts).where(eq(accounts.userId, users.id)))
+        ),
+        exclude.length > 0 ? notInArray(workspaces.id, exclude) : undefined,
       ),
     );
 }
@@ -44,7 +48,7 @@ export async function GET() {
   const session = await auth();
   if (!session?.user.id) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const domain = await companyDomainOf(session.user.id);
+  const domain = await verifiedCompanyDomain(session.user.id);
   if (!domain) return NextResponse.json({ workspaces: [] });
 
   return NextResponse.json({ workspaces: await listJoinable(session.user.id, domain) });
@@ -67,7 +71,7 @@ export async function POST(req: Request) {
     }
 
     // Mesma regra do GET — não confia no id vindo do cliente.
-    const domain = await companyDomainOf(userId);
+    const domain = await verifiedCompanyDomain(userId);
     const joinable = domain ? await listJoinable(userId, domain) : [];
     if (!joinable.some((w) => w.id === workspaceId)) {
       return NextResponse.json({ error: "Este workspace não está aberto pra você" }, { status: 403 });

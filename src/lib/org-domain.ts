@@ -9,7 +9,7 @@
  */
 
 import { db } from "@/lib/db";
-import { workspaces, workspaceMembers } from "@/lib/db/schema";
+import { workspaces, workspaceMembers, users, accounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { slugify } from "@/lib/utils";
 import freeEmailDomains from "free-email-domains";
@@ -30,6 +30,21 @@ export function getEmailDomain(email: string): string {
 
 export function isCompanyDomain(domain: string): boolean {
   return domain.length > 0 && !PUBLIC_EMAIL_DOMAINS.has(domain);
+}
+
+/**
+ * Domínio corporativo que a pessoa PROVOU ser dela: confirmou o e-mail pelo link ou
+ * entrou por OAuth (Google/GitHub já validaram). Mesma regra de invites.ts. Sem essa
+ * prova, qualquer um se cadastraria como ceo@empresa.com e se passaria pela empresa.
+ */
+export async function verifiedCompanyDomain(userId: string): Promise<string | null> {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  if (!user) return null;
+  const domain = getEmailDomain(user.email);
+  if (!isCompanyDomain(domain)) return null;
+  if (user.emailVerified) return domain;
+  const oauth = await db.query.accounts.findFirst({ where: eq(accounts.userId, userId) });
+  return oauth ? domain : null;
 }
 
 /**
