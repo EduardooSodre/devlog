@@ -148,8 +148,9 @@ async function main() {
 
   const [user] = await db.select().from(users).where(eq(users.email, USER_EMAIL));
   if (!user) throw new Error(`Usuário ${USER_EMAIL} não encontrado`);
-  const [mem] = await db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, user.id));
-  if (!mem) throw new Error("Usuário sem workspace");
+  // Sempre o workspace PRÓPRIO do usuário (onde ele é owner), nunca o primeiro em que for membro.
+  const [mem] = await db.select().from(workspaceMembers).where(and(eq(workspaceMembers.userId, user.id), eq(workspaceMembers.role, "owner")));
+  if (!mem) throw new Error("Usuário sem workspace próprio");
   const wsId = mem.workspaceId;
 
   const boards = await db.select().from(kanbanBoards).where(eq(kanbanBoards.workspaceId, wsId));
