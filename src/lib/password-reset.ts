@@ -13,6 +13,7 @@ import bcrypt from "bcryptjs";
 import { sendMail, escapeHtml } from "@/lib/mail";
 
 const TOKEN_TTL_MINUTES = 60;
+const COOLDOWN_MINUTES = 1;
 const PREFIX = "reset:";
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -23,6 +24,17 @@ export async function requestPasswordReset(email: string): Promise<void> {
   if (!user) return;
 
   const identifier = PREFIX + user.email;
+
+  // Anti-spam: no máximo 1 e-mail por minuto por conta. A tabela só tem `expires`,
+  // então "criado há menos de 1 min" = expira depois de (agora + TTL - 1 min).
+  const recent = await db.query.verificationTokens.findFirst({
+    where: and(
+      eq(verificationTokens.identifier, identifier),
+      gt(verificationTokens.expires, new Date(Date.now() + (TOKEN_TTL_MINUTES - COOLDOWN_MINUTES) * 60_000)),
+    ),
+  });
+  if (recent) return;
+
   await db.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));
 
   const token = nanoid(32);
