@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock, Pencil } from "lucide-react";
+import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock, Pencil, CheckSquare, Square, Send } from "lucide-react";
 import { api, errorMessage } from "@/lib/api-client";
 import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
@@ -18,6 +18,7 @@ import { ListView } from "./ListView";
 import { CalendarView } from "./CalendarView";
 import { FilesView } from "./FilesView";
 import { TimelineView } from "./TimelineView";
+import { BulkTransferDialog } from "./BulkTransferDialog";
 import { MessagesView } from "./MessagesView";
 import { FilterPanel, EMPTY_FILTERS, applyCardFilters, sortCards, type CardFilters } from "./FilterPanel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -91,6 +92,11 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
   const [filterMine, setFilterMine] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(true);
   const [cardFilters, setCardFilters] = useState<CardFilters>(EMPTY_FILTERS);
+  // Modo "Selecionar" do Painel: escolher vários cards pra enviar de uma vez a outro
+  // board/workspace. Enquanto ativo, clicar no card marca/desmarca em vez de abrir.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkTransfer, setShowBulkTransfer] = useState(false);
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
   const isDraggingRef = useRef(false);
@@ -118,11 +124,11 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (selectedCard || isDraggingRef.current) return;
+      if (selectedCard || isDraggingRef.current || showBulkTransfer) return;
       reloadBoards();
     }, 15_000);
     return () => clearInterval(interval);
-  }, [reloadBoards, selectedCard]);
+  }, [reloadBoards, selectedCard, showBulkTransfer]);
 
   // "Minhas tarefas" se aplica em qualquer view; "Ocultar concluídas" só nas views de
   // planejamento (lista/cronograma/calendário) — no Painel a coluna Concluído é o
@@ -160,6 +166,32 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
       })),
     [filteredColumns, cardFilters]
   );
+
+  // Cards selecionados na ordem em que aparecem no Painel (a ordem é mantida no destino).
+  const selectedCards = useMemo(
+    () =>
+      boardColumns.flatMap((col) =>
+        (col.cards ?? []).filter((c) => selectedIds.has(c.id)).map((c) => ({ id: c.id, columnName: col.name }))
+      ),
+    [boardColumns, selectedIds]
+  );
+  const visibleCardIds = useMemo(() => boardColumns.flatMap((col) => (col.cards ?? []).map((c) => c.id)), [boardColumns]);
+
+  function toggleSelected(ids: string[], on: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  function exitSelecting() {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  }
 
   // Pra popular os pickers de Responsável/Criador do FilterPanel com quem já aparece
   // em algum card do board ativo — evita listar o workspace inteiro sem necessidade.
@@ -806,6 +838,20 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
                   Ocultar concluídas
                 </button>
               )}
+              {view === "board" && (
+                <button
+                  onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
+                  className={cn(
+                    "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+                    selecting
+                      ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                      : "border-border text-muted-foreground hover:border-primary/30"
+                  )}
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  Selecionar
+                </button>
+              )}
               <FilterPanel filters={cardFilters} onChange={setCardFilters} people={filterPeople} />
             </div>
         </div>
@@ -848,7 +894,7 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
             {(colsDrop) => (
             <div ref={colsDrop.innerRef} {...colsDrop.droppableProps} className="flex h-full items-stretch">
             {boardColumns.map((column, colIndex) => (
-              <Draggable key={column.id} draggableId={`column-${column.id}`} index={colIndex} isDragDisabled={!canManageActiveBoard}>
+              <Draggable key={column.id} draggableId={`column-${column.id}`} index={colIndex} isDragDisabled={!canManageActiveBoard || selecting}>
               {(colDrag, colSnap) => {
                 // Margem (não `gap`) entre colunas: o dnd mede margens, e `gap` faz a
                 // animação de soltar errar o lugar.
@@ -875,7 +921,10 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
                 onCreateCard={() => handleCreateCard(column.id)}
                 loadingCard={loadingCard}
                 canManageColumns={canManageActiveBoard}
-                canDragCard={canWorkOn}
+                canDragCard={(card) => !selecting && canWorkOn(card)}
+                selecting={selecting}
+                selectedIds={selectedIds}
+                onToggleCards={toggleSelected}
               />
               </div>
                 );
@@ -939,6 +988,58 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
         </DragDropContext>
       )}
 
+      {/* ── Barra de seleção ── */}
+      {selecting && view === "board" && activeBoard && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 bg-card border border-border rounded-xl shadow-2xl px-2 py-1.5 text-xs">
+          <span className="px-2 font-medium tabular-nums">
+            {selectedIds.size} selecionada{selectedIds.size === 1 ? "" : "s"}
+          </span>
+          <button
+            onClick={() => toggleSelected(visibleCardIds, true)}
+            className="px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+          >
+            Selecionar todos
+          </button>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+            >
+              Limpar
+            </button>
+          )}
+          <button
+            onClick={() => setShowBulkTransfer(true)}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40"
+          >
+            <Send className="w-3.5 h-3.5" /> Enviar para…
+          </button>
+          <button onClick={exitSelecting} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-background transition-colors" title="Sair da seleção">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {showBulkTransfer && activeBoard && (
+        <BulkTransferDialog
+          cards={selectedCards}
+          workspaceId={workspaceId}
+          currentBoardId={activeBoard.id}
+          otherWorkspaces={otherWorkspaces}
+          onClose={() => setShowBulkTransfer(false)}
+          onDone={(failedIds) => {
+            reloadBoards();
+            if (failedIds.length === 0) {
+              setShowBulkTransfer(false);
+              exitSelecting();
+            } else {
+              setSelectedIds(new Set(failedIds));
+            }
+          }}
+        />
+      )}
+
       {/* ── Card Modal ── */}
       {selectedCard && (
         <CardModal
@@ -975,6 +1076,9 @@ interface ColumnProps {
   canManageColumns: boolean;
   canDragCard: (card: KanbanCardWithDetails) => boolean;
   dragHandleProps: DraggableProvidedDragHandleProps | null;
+  selecting: boolean;
+  selectedIds: Set<string>;
+  onToggleCards: (ids: string[], on: boolean) => void;
 }
 
 function KanbanColumn({
@@ -992,6 +1096,9 @@ function KanbanColumn({
   onUpdateColumn,
   canManageColumns,
   canDragCard,
+  selecting,
+  selectedIds,
+  onToggleCards,
 }: ColumnProps) {
   const [showColumnActions, setShowColumnActions] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -1007,6 +1114,7 @@ function KanbanColumn({
     if (ok) setEditing(false);
   }
   const cards = column.cards ?? [];
+  const allColumnSelected = cards.length > 0 && cards.every((c) => selectedIds.has(c.id));
   const doneCount = cards.filter((c) => c.status === "done").length;
 
   return (
@@ -1072,6 +1180,20 @@ function KanbanColumn({
             {cards.length}
           </span>
         </div>
+        {selecting ? (
+          cards.length > 0 && (
+            <button
+              onClick={() => onToggleCards(cards.map((c) => c.id), !allColumnSelected)}
+              className={cn(
+                "flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg transition-colors",
+                allColumnSelected ? "text-primary" : "text-muted-foreground hover:text-foreground hover:bg-card"
+              )}
+            >
+              {allColumnSelected ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+              {allColumnSelected ? "Desmarcar coluna" : "Selecionar coluna"}
+            </button>
+          )
+        ) : (
         <div className="flex items-center gap-1">
           <button
             onClick={onStartAdd}
@@ -1121,6 +1243,7 @@ function KanbanColumn({
           </div>
           )}
         </div>
+        )}
         </>
         )}
       </div>
@@ -1155,14 +1278,26 @@ function KanbanColumn({
                     ref={drag.innerRef}
                     {...drag.draggableProps}
                     {...drag.dragHandleProps}
-                    onClick={() => onCardClick(card)}
+                    onClick={() => (selecting ? onToggleCards([card.id], !selectedIds.has(card.id)) : onCardClick(card))}
                     className={cn(
-                      "bg-card border rounded-xl p-3.5 cursor-pointer group transition-all duration-200",
+                      "relative bg-card border rounded-xl p-3.5 cursor-pointer group transition-all duration-200",
+                      selecting && "pr-9",
                       snap.isDragging
                         ? "border-primary/50 shadow-lg shadow-primary/10 rotate-1 scale-105"
-                        : "border-border hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md"
+                        : selecting && selectedIds.has(card.id)
+                          ? "border-primary ring-1 ring-primary"
+                          : "border-border hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md"
                     )}
                   >
+                    {selecting && (
+                      <span className="absolute top-3 right-3">
+                        {selectedIds.has(card.id) ? (
+                          <CheckSquare className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Square className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </span>
+                    )}
                     {/* Priority dot + status */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">

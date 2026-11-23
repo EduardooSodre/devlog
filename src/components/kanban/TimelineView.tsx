@@ -177,12 +177,16 @@ export function TimelineView({ columns, onCardClick }: Props) {
               )}
 
               {groups.map(({ column, rows }) => (
-                <div key={column.id}>
-                  {/* Cabeçalho do grupo (coluna do board) */}
-                  <div className="relative flex h-8">
-                    <div className="sticky left-0 z-20 h-full flex items-end pb-1 px-4 bg-background border-r border-border text-[11px] font-medium text-muted-foreground" style={{ width: LABEL_WIDTH }}>
-                      {column.name}
-                      <span className="ml-1.5 text-muted-foreground/50">{rows.length}</span>
+                <div key={column.id} className="border-t border-foreground/15 first:border-t-0">
+                  {/* Cabeçalho do grupo (coluna do board): faixa de largura total, com a cor
+                      da coluna — separa bem "A Fazer", "Revisão" etc. sem depender dos nomes. */}
+                  <div className="relative flex h-9 bg-foreground/[0.04] border-b border-border/60">
+                    <div className="sticky left-0 z-20 h-full bg-background border-r border-border" style={{ width: LABEL_WIDTH }}>
+                      <div className="h-full flex items-center gap-2 px-4 bg-foreground/[0.04]">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: column.color ?? "#64748b" }} />
+                        <span className="text-xs font-semibold text-foreground truncate">{column.name}</span>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">{rows.length}</span>
+                      </div>
                     </div>
                   </div>
 
