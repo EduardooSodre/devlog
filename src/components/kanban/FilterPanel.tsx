@@ -18,6 +18,8 @@ export interface CardFilters {
   updatedBefore: string;
   completedAfter: string;
   completedBefore: string;
+  /** "urgency": Urgente → Alta → Média → Baixa e, dentro de cada uma, prazo mais próximo primeiro. */
+  sort: "" | "urgency";
 }
 
 export const EMPTY_FILTERS: CardFilters = {
@@ -32,6 +34,7 @@ export const EMPTY_FILTERS: CardFilters = {
   updatedBefore: "",
   completedAfter: "",
   completedBefore: "",
+  sort: "",
 };
 
 export function isFiltersActive(f: CardFilters) {
@@ -43,7 +46,8 @@ export function isFiltersActive(f: CardFilters) {
     f.creatorIds.length > 0 ||
     !!f.createdAfter || !!f.createdBefore ||
     !!f.updatedAfter || !!f.updatedBefore ||
-    !!f.completedAfter || !!f.completedBefore
+    !!f.completedAfter || !!f.completedBefore ||
+    !!f.sort
   );
 }
 
@@ -68,6 +72,14 @@ export function applyCardFilters(card: KanbanCardWithDetails, f: CardFilters): b
   if (f.completedAfter && (!card.completedAt || new Date(card.completedAt) < new Date(f.completedAfter))) return false;
   if (f.completedBefore && (!card.completedAt || new Date(card.completedAt) > new Date(f.completedBefore + "T23:59:59"))) return false;
   return true;
+}
+
+const PRIORITY_RANK: Record<CardPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+const dueTime = (c: KanbanCardWithDetails) => (c.dueDate ? new Date(c.dueDate).getTime() : Number.MAX_SAFE_INTEGER);
+
+export function sortCards(cards: KanbanCardWithDetails[], f: CardFilters): KanbanCardWithDetails[] {
+  if (f.sort !== "urgency") return cards;
+  return [...cards].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || dueTime(a) - dueTime(b));
 }
 
 const PRIORITIES: CardPriority[] = ["low", "medium", "high", "urgent"];
@@ -185,6 +197,21 @@ export function FilterPanel({ filters, onChange, people }: Props) {
                   {label}
                 </button>
               ))}
+            </div>
+
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Ordenar</p>
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              <button
+                onClick={() => patch({ sort: filters.sort === "urgency" ? "" : "urgency" })}
+                className={cn(
+                  "text-xs px-2.5 py-1.5 rounded-full border transition-colors",
+                  filters.sort === "urgency"
+                    ? "bg-primary/10 border-primary/40 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:border-primary/30"
+                )}
+              >
+                Urgentes e prazos próximos primeiro
+              </button>
             </div>
 
             <div className="space-y-3">

@@ -19,7 +19,7 @@ import { CalendarView } from "./CalendarView";
 import { FilesView } from "./FilesView";
 import { TimelineView } from "./TimelineView";
 import { MessagesView } from "./MessagesView";
-import { FilterPanel, EMPTY_FILTERS, applyCardFilters, type CardFilters } from "./FilterPanel";
+import { FilterPanel, EMPTY_FILTERS, applyCardFilters, sortCards, type CardFilters } from "./FilterPanel";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const VIEWS = [
@@ -139,9 +139,12 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
     () =>
       filteredColumns.map((col) => ({
         ...col,
-        cards: (col.cards ?? [])
-          .filter((c) => !hideCompleted || c.status !== "done")
-          .filter((c) => applyCardFilters(c, cardFilters)),
+        cards: sortCards(
+          (col.cards ?? [])
+            .filter((c) => !hideCompleted || c.status !== "done")
+            .filter((c) => applyCardFilters(c, cardFilters)),
+          cardFilters
+        ),
       })),
     [filteredColumns, hideCompleted, cardFilters]
   );
@@ -153,7 +156,7 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
     () =>
       filteredColumns.map((col) => ({
         ...col,
-        cards: (col.cards ?? []).filter((c) => applyCardFilters(c, cardFilters)),
+        cards: sortCards((col.cards ?? []).filter((c) => applyCardFilters(c, cardFilters)), cardFilters),
       })),
     [filteredColumns, cardFilters]
   );
