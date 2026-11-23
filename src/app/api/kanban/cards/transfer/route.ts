@@ -120,6 +120,16 @@ export async function POST(req: NextRequest) {
   }
 
   // ── copy ──
+  // Vínculo aponta pro original "raiz" (pra cópia de cópia continuar sincronizando), mas
+  // só se quem copia também enxerga essa raiz — senão receberia atualizações de uma
+  // tarefa que não pode ver. Sem acesso à raiz, vincula à cópia que ele de fato copiou.
+  let linkTo: string | null = null;
+  if (link) {
+    linkTo = card.id;
+    if (card.sourceCardId && (await assertCardAccess(session.user.id, card.sourceCardId))) {
+      linkTo = card.sourceCardId;
+    }
+  }
   const [copy] = await db
     .insert(kanbanCards)
     .values({
@@ -138,8 +148,7 @@ export async function POST(req: NextRequest) {
       // Quem copia vira o criador da cópia — se o original era "private", a cópia
       // continua restrita (agora a quem copiou + o responsável, se ele ainda for válido).
       visibility: card.visibility,
-      // Aponta sempre pro original "raiz", pra uma cópia de cópia continuar sincronizando.
-      sourceCardId: link ? (card.sourceCardId ?? card.id) : null,
+      sourceCardId: linkTo,
     })
     .returning();
 
