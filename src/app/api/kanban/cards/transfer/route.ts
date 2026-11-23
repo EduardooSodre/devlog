@@ -10,7 +10,8 @@ import { db } from "@/lib/db";
 import { kanbanCards, kanbanBoards, kanbanColumns, cardSubtasks, cardBoards } from "@/lib/db/schema";
 import { and, eq, max } from "drizzle-orm";
 import { z } from "zod";
-import { assertCardAccess, canAccessBoard, verifyWorkspaceAccess } from "@/lib/workspace";
+import { assertCardAccess, canAccessBoard, getMemberRole, verifyWorkspaceAccess } from "@/lib/workspace";
+import { canMoveCard } from "@/lib/permissions";
 import { logActivity } from "@/lib/activity";
 
 const schema = z.object({
@@ -19,6 +20,8 @@ const schema = z.object({
   targetBoardId: z.string(),
   targetColumnId: z.string(),
   mode: z.enum(["move", "copy"]),
+  // Só pra cópia: a cópia passa a acompanhar as edições do original (ver sourceCardId).
+  link: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -31,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { cardId, targetWorkspaceId, targetBoardId, targetColumnId, mode } = parsed.data;
+  const { cardId, targetWorkspaceId, targetBoardId, targetColumnId, mode, link } = parsed.data;
 
   const access = await assertCardAccess(session.user.id, cardId);
   if (!access) {
@@ -39,6 +42,20 @@ export async function POST(req: NextRequest) {
   }
   const { card, board: sourceBoard } = access;
   const sameWorkspace = sourceBoard.workspaceId === targetWorkspaceId;
+
+  if (mode === "move") {
+    const role = await getMemberRole(session.user.id, sourceBoard.workspaceId);
+    if (!canMoveCard(session.user.id, card, role, sameWorkspace)) {
+      return NextResponse.json(
+        {
+          error: sameWorkspace
+            ? "Só quem criou, o responsável ou um administrador pode mover esta tarefa"
+            : "Você só pode mover para outro workspace tarefas que você criou — copie esta em vez de mover",
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   if (!(await verifyWorkspaceAccess(session.user.id, targetWorkspaceId))) {
     return NextResponse.json({ error: "Você não faz parte do workspace de destino" }, { status: 403 });
@@ -121,6 +138,8 @@ export async function POST(req: NextRequest) {
       // Quem copia vira o criador da cópia — se o original era "private", a cópia
       // continua restrita (agora a quem copiou + o responsável, se ele ainda for válido).
       visibility: card.visibility,
+      // Aponta sempre pro original "raiz", pra uma cópia de cópia continuar sincronizando.
+      sourceCardId: link ? (card.sourceCardId ?? card.id) : null,
     })
     .returning();
 

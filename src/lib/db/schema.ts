@@ -21,6 +21,7 @@ import {
   index,
   uniqueIndex,
   jsonb,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -419,12 +420,17 @@ export const kanbanCards = pgTable(
     // default, pra não esconder retroativamente cards que já existiam antes disso existir).
     visibility: cardVisibilityEnum("visibility").notNull().default("public"),
     isArchived: boolean("is_archived").notNull().default(false),
+    // Cópia vinculada: quando alguém envia pra outro workspace uma tarefa que não é dele,
+    // ela é copiada (a dona não perde a dela) e a cópia acompanha as edições do original
+    // (título, descrição, prioridade, dificuldade, datas). Sentido único: original → cópia.
+    sourceCardId: text("source_card_id").references((): AnyPgColumn => kanbanCards.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => ({
     columnIdx: index("cards_column_idx").on(table.columnId),
     boardIdx: index("cards_board_idx").on(table.boardId),
+    sourceIdx: index("cards_source_idx").on(table.sourceCardId),
   })
 );
 

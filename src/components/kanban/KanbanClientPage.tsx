@@ -41,9 +41,12 @@ interface Props {
   workspaceId: string;
   otherWorkspaces?: { id: string; name: string }[];
   currentUserRole?: string;
+  initialUrlState?: { view?: string; cardId?: string; mine?: boolean; showDone?: boolean };
 }
 
-export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, otherWorkspaces = [], currentUserRole = "member" }: Props) {
+const isViewId = (v: string | undefined): v is ViewId => VIEWS.some((x) => x.id === v);
+
+export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, otherWorkspaces = [], currentUserRole = "member", initialUrlState = {} }: Props) {
   const [boards, setBoards] = useState<KanbanBoardWithColumns[]>(initialBoards);
   const [activeBoard, setActiveBoard] = useState<KanbanBoardWithColumns | null>(
     initialBoards.find((b) => b.id === initialBoardId) ?? initialBoards[0] ?? null
@@ -61,7 +64,11 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
     }
     document.cookie = `devlog_board_${workspaceId}=${activeBoardId}; path=/; max-age=31536000; samesite=lax`;
   }, [activeBoardId, workspaceId]);
-  const [selectedCard, setSelectedCard] = useState<KanbanCardWithDetails | null>(null);
+  const [selectedCard, setSelectedCard] = useState<KanbanCardWithDetails | null>(() => {
+    if (!initialUrlState.cardId) return null;
+    for (const b of initialBoards) for (const col of b.columns) for (const c of col.cards ?? []) if (c.id === initialUrlState.cardId) return c;
+    return null;
+  });
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   // "personal" (padrão — só o criador vê), "workspace" (todo mundo), ou o id de um
@@ -88,9 +95,22 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
   const [savingColumn, setSavingColumn] = useState(false);
   const [showBoardSettings, setShowBoardSettings] = useState(false);
   const [showBoardSwitcher, setShowBoardSwitcher] = useState(false);
-  const [view, setView] = useState<ViewId>("board");
-  const [filterMine, setFilterMine] = useState(false);
-  const [hideCompleted, setHideCompleted] = useState(true);
+  const [view, setView] = useState<ViewId>(isViewId(initialUrlState.view) ? initialUrlState.view : "board");
+  const [filterMine, setFilterMine] = useState(!!initialUrlState.mine);
+  const [hideCompleted, setHideCompleted] = useState(!initialUrlState.showDone);
+
+  // Espelha aba, card aberto e toggles na URL (só o que foge do padrão, pra URL ficar
+  // limpa). F5 / link compartilhado reabrem no mesmo lugar sem nenhum request a mais.
+  const selectedCardId = selectedCard?.id;
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const put = (key: string, value: string | null) => (value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
+    put("view", view === "board" ? null : view);
+    put("card", selectedCardId ?? null);
+    put("mine", filterMine ? "1" : null);
+    put("done", hideCompleted ? null : "1");
+    if (url.href !== window.location.href) window.history.replaceState(null, "", url);
+  }, [view, selectedCardId, filterMine, hideCompleted]);
   const [cardFilters, setCardFilters] = useState<CardFilters>(EMPTY_FILTERS);
   // Modo "Selecionar" do Painel: escolher vários cards pra enviar de uma vez a outro
   // board/workspace. Enquanto ativo, clicar no card marca/desmarca em vez de abrir.
@@ -171,7 +191,7 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
   const selectedCards = useMemo(
     () =>
       boardColumns.flatMap((col) =>
-        (col.cards ?? []).filter((c) => selectedIds.has(c.id)).map((c) => ({ id: c.id, columnName: col.name }))
+        (col.cards ?? []).filter((c) => selectedIds.has(c.id)).map((c) => ({ id: c.id, columnName: col.name, createdById: c.createdById, assignedToId: c.assignedToId }))
       ),
     [boardColumns, selectedIds]
   );
@@ -870,7 +890,12 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
             </p>
           </div>
           <button
-            onClick={() => setCreatingBoard(true)}
+            onClick={() => {
+              // O formulário de criar board mora dentro do menu de boards — sem abrir o
+              // menu, o clique ligava o formulário mas nada aparecia.
+              setCreatingBoard(true);
+              setShowBoardSwitcher(true);
+            }}
             className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-4 h-4" /> Criar primeiro board
@@ -1026,6 +1051,8 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
           cards={selectedCards}
           workspaceId={workspaceId}
           currentBoardId={activeBoard.id}
+          currentUserId={currentUserId ?? ""}
+          currentUserRole={currentUserRole}
           otherWorkspaces={otherWorkspaces}
           onClose={() => setShowBulkTransfer(false)}
           onDone={(failedIds) => {

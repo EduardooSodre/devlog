@@ -8,7 +8,7 @@ import { getActiveWorkspaceId, getUserWorkspaces, verifyWorkspaceAccess, getBoar
 
 export const metadata = { title: "Projetos" };
 
-export default async function ProjetosPage({ searchParams }: { searchParams: Promise<{ board?: string }> }) {
+export default async function ProjetosPage({ searchParams }: { searchParams: Promise<{ board?: string; view?: string; card?: string; mine?: string; done?: string }> }) {
   const session = await auth();
   const userId = session!.user.id;
   const workspaceId = await getActiveWorkspaceId(userId);
@@ -71,13 +71,20 @@ export default async function ProjetosPage({ searchParams }: { searchParams: Pro
   // Board aberto: o da URL (?board=) ou, sem ela, o último que a pessoa usou neste
   // workspace (cookie gravado pelo client). Id que não está na lista
   // (ex.: URL de outro workspace depois de trocar) é ignorado.
-  const boardIdFromUrl = (await searchParams).board;
+  const params = await searchParams;
+  const boardIdFromUrl = params.board;
   const lastBoardId = workspaceId ? (await cookies()).get(`devlog_board_${workspaceId}`)?.value : undefined;
-  const initialBoardId = [boardIdFromUrl, lastBoardId].find((id) => boards.some((b) => b.id === id));
+  // Card da URL (?card=, também usado nos links das notificações): abre já no board dele.
+  const boardOfCard = params.card
+    ? boards.find((b) => b.columns.some((col) => col.cards.some((c) => c.id === params.card)))?.id
+    : undefined;
+  const initialBoardId = [boardOfCard, boardIdFromUrl, lastBoardId].find((id) => boards.some((b) => b.id === id));
 
   return (
     <KanbanClientPage
       initialBoardId={initialBoardId}
+      // Aba, card aberto e toggles vêm da URL — F5 volta exatamente onde a pessoa estava.
+      initialUrlState={{ view: params.view, cardId: boardOfCard ? params.card : undefined, mine: params.mine === "1", showDone: params.done === "1" }}
       initialBoards={boards as Parameters<typeof KanbanClientPage>[0]["initialBoards"]}
       workspaceId={workspaceId ?? ""}
       otherWorkspaces={otherWorkspaces}

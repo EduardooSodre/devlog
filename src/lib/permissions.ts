@@ -23,6 +23,20 @@ export function canWorkOnCard(
   return canManageCard(userId, card, role) || card.assignedToId === userId;
 }
 
+/**
+ * Mover um card pra outro board/workspace (ele sai de onde está). Exige poder trabalhar
+ * nele e, pra OUTRO workspace, ser quem criou — senão a dona da tarefa a perderia de
+ * vista. Nesses casos o caminho é copiar com vínculo.
+ */
+export function canMoveCard(
+  userId: string,
+  card: { createdById: string; assignedToId: string | null },
+  role: string | null | undefined,
+  sameWorkspace: boolean
+): boolean {
+  return canWorkOnCard(userId, card, role) && (sameWorkspace || card.createdById === userId);
+}
+
 /** Mudar nome/cor/visibilidade/colunas/membros de um board, arquivar ou excluir. */
 export function canManageBoard(userId: string, board: { createdById: string }, role: string | null | undefined): boolean {
   return board.createdById === userId || isAdminRole(role);

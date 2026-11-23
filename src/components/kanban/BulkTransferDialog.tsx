@@ -5,10 +5,13 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { AlertTriangle, Loader2, X } from "lucide-react";
 import { api, errorMessage } from "@/lib/api-client";
+import { canMoveCard } from "@/lib/permissions";
 
 interface SelectedCard {
   id: string;
   columnName: string;
+  createdById: string;
+  assignedToId: string | null;
 }
 
 interface TargetBoard {
@@ -21,6 +24,8 @@ interface Props {
   cards: SelectedCard[]; // na ordem em que aparecem no board — a ordem é mantida no destino
   workspaceId: string;
   currentBoardId: string;
+  currentUserId: string;
+  currentUserRole: string;
   otherWorkspaces: { id: string; name: string }[];
   onClose: () => void;
   /** Chamado ao terminar (com ou sem falhas); recebe os ids que NÃO foram enviados. */
@@ -30,7 +35,7 @@ interface Props {
 const CREATE = "__create__";
 const norm = (s: string) => s.trim().toLocaleLowerCase("pt-BR");
 
-export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWorkspaces, onClose, onDone }: Props) {
+export function BulkTransferDialog({ cards, workspaceId, currentBoardId, currentUserId, currentUserRole, otherWorkspaces, onClose, onDone }: Props) {
   const [targetWorkspaceId, setTargetWorkspaceId] = useState(otherWorkspaces[0]?.id ?? workspaceId);
   const [boards, setBoards] = useState<TargetBoard[] | null>(null);
   const [targetBoardId, setTargetBoardId] = useState("");
@@ -65,6 +70,12 @@ export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWo
   }, [targetWorkspaceId, currentBoardId]);
 
   const targetBoard = boards?.find((b) => b.id === targetBoardId);
+
+  // Tarefa de outra pessoa nunca é movida (a dona a perderia): vira cópia vinculada, que
+  // acompanha as edições do original. Mesma regra que o servidor aplica.
+  const sameWorkspace = targetWorkspaceId === workspaceId;
+  const mustCopy = (c: SelectedCard) => !canMoveCard(currentUserId, c, currentUserRole, sameWorkspace);
+  const forcedCopyCount = cards.filter(mustCopy).length;
 
   // Ao trocar o board de destino, pré-seleciona a coluna de mesmo nome; se não existir,
   // sugere criar — a pessoa pode trocar pra qualquer coluna que já exista.
@@ -103,7 +114,10 @@ export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWo
     // 2) Envia os cards um a um, na ordem do board, pra manter a ordem no destino.
     // ponytail: um request por card; endpoint em lote se isso virar centenas por vez.
     const failed: string[] = [];
+    let copiedInstead = 0;
     for (const [i, card] of cards.entries()) {
+      const forced = mode === "move" && mustCopy(card);
+      if (forced) copiedInstead++;
       try {
         await api("/api/kanban/cards/transfer", {
           method: "POST",
@@ -112,7 +126,8 @@ export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWo
             targetWorkspaceId,
             targetBoardId: targetBoard.id,
             targetColumnId: resolved[norm(card.columnName)],
-            mode,
+            mode: forced ? "copy" : mode,
+            link: card.createdById !== currentUserId,
           },
         });
       } catch {
@@ -123,7 +138,11 @@ export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWo
 
     const ok = cards.length - failed.length;
     const verb = mode === "move" ? "movida" : "copiada";
-    if (ok > 0) toast.success(`${ok} tarefa${ok > 1 ? "s" : ""} ${verb}${ok > 1 ? "s" : ""} para "${targetBoard.name}"`);
+    if (ok > 0) {
+      toast.success(`${ok} tarefa${ok > 1 ? "s" : ""} ${verb}${ok > 1 ? "s" : ""} para "${targetBoard.name}"`, {
+        description: copiedInstead > 0 ? `${copiedInstead} de outras pessoas foram copiadas (vinculadas), não movidas.` : undefined,
+      });
+    }
     if (failed.length > 0) toast.error(`${failed.length} não ${failed.length > 1 ? "puderam" : "pôde"} ser enviada${failed.length > 1 ? "s" : ""} — continuam selecionadas`);
     setRunning(null);
     onDone(failed);
@@ -214,6 +233,14 @@ export function BulkTransferDialog({ cards, workspaceId, currentBoardId, otherWo
               <p className="text-[11px] text-muted-foreground mb-3">Este board ainda não tem colunas.</p>
             )}
           </>
+        )}
+
+        {forcedCopyCount > 0 && (
+          <p className="text-[11px] text-muted-foreground mb-3 leading-relaxed">
+            {forcedCopyCount} tarefa{forcedCopyCount > 1 ? "s" : ""} não {forcedCopyCount > 1 ? "são suas" : "é sua"}:
+            ao mover, {forcedCopyCount > 1 ? "serão copiadas" : "será copiada"} em vez de movida{forcedCopyCount > 1 ? "s" : ""},
+            pra quem criou não perder. A cópia acompanha as edições feitas no original.
+          </p>
         )}
 
         <div className="flex gap-2">

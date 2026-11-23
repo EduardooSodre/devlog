@@ -7,8 +7,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { kanbanCards, kanbanBoards, kanbanColumns } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { kanbanCards, kanbanBoards, kanbanColumns, workspaceMembers } from "@/lib/db/schema";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { notifyUser } from "@/lib/notify";
 import { logActivity } from "@/lib/activity";
@@ -242,6 +242,30 @@ export async function PATCH(req: NextRequest) {
       .set(updateData)
       .where(eq(kanbanCards.id, id))
       .returning();
+
+    // Cópias vinculadas (sourceCardId) acompanham o conteúdo do original. Só roda quando
+    // algum desses campos mudou, e é UM update por índice — sem cópias, não toca em nada.
+    // Só alimenta cópias de quem AINDA enxerga o original: membro do workspace dele (e, se
+    // o original for privado, só criador/responsável). Quem perdeu acesso para de receber.
+    // ponytail: não reavalia boards restritos a departamento — adicionar se isso importar.
+    const SYNCED = ["title", "description", "priority", "difficulty", "startDate", "dueDate"] as const;
+    const synced = Object.fromEntries(SYNCED.filter((f) => f in updateData).map((f) => [f, updateData[f]]));
+    if (Object.keys(synced).length > 0) {
+      const allowedCopiers =
+        updated.visibility === "private"
+          ? inArray(kanbanCards.createdById, [updated.createdById, updated.assignedToId].filter((v): v is string => !!v))
+          : inArray(
+              kanbanCards.createdById,
+              db
+                .select({ id: workspaceMembers.userId })
+                .from(workspaceMembers)
+                .where(eq(workspaceMembers.workspaceId, access.board.workspaceId))
+            );
+      await db
+        .update(kanbanCards)
+        .set({ ...synced, updatedAt: new Date() })
+        .where(and(eq(kanbanCards.sourceCardId, id), allowedCopiers));
+    }
 
     if (updates.beforeId !== undefined) {
       // Inclui cards privados que o usuário não vê — por isso posiciona por vizinho, não
