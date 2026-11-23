@@ -336,6 +336,14 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
   // completar a tarefa move pra "Concluído" automaticamente), realoca pra coluna certa
   // em vez de deixar uma cópia desatualizada parada na coluna antiga.
   function relocateCard(columns: KanbanColumnWithCards[], updated: KanbanCardWithDetails) {
+    // Mesma coluna: troca no lugar. Antes o card sempre ia pro fim da lista a cada
+    // edição e a pessoa perdia ele de vista em colunas grandes.
+    const current = columns.find((col) => (col.cards ?? []).some((c) => c.id === updated.id));
+    if (current?.id === updated.columnId) {
+      return columns.map((col) =>
+        col.id !== current.id ? col : { ...col, cards: (col.cards ?? []).map((c) => (c.id === updated.id ? updated : c)) }
+      );
+    }
     const stripped = columns.map((col) => ({
       ...col,
       cards: (col.cards ?? []).filter((c) => c.id !== updated.id),

@@ -44,7 +44,15 @@ export function TimelineView({ columns, onCardClick }: Props) {
             const start = startOfDay(new Date(card.startDate ?? card.createdAt));
             const due = card.dueDate ? startOfDay(new Date(card.dueDate)) : null;
             return { card, start, due: due && due < start ? start : due };
-          }),
+          })
+          // Escadinha por data: quem começa antes vem primeiro; empate → termina antes;
+          // sem prazo por último; depois por título pra ordem não "pular".
+          .sort(
+            (a, b) =>
+              a.start.getTime() - b.start.getTime() ||
+              (a.due?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.due?.getTime() ?? Number.MAX_SAFE_INTEGER) ||
+              a.card.title.localeCompare(b.card.title, "pt-BR")
+          ),
         }))
         .filter((g) => g.rows.length > 0),
     [columns]
