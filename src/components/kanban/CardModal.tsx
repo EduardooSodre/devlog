@@ -46,9 +46,8 @@ interface Props {
   onClose: () => void;
   onUpdate: (updated: KanbanCardWithDetails) => void;
   onDelete: (cardId: string, opts?: { skipServerDelete?: boolean }) => void;
-  /** Chamado depois de MOVER (não copiar) o card pra outro workspace — ele deixa de
-   * existir no board atual. */
-  onMovedAway?: () => void;
+  /** Chamado depois de mover/copiar o card pra outro board — a página recarrega os boards. */
+  onTransferred?: () => void;
 }
 
 const priorities = ["low", "medium", "high", "urgent"] as const;
@@ -65,7 +64,7 @@ function toDateInputValue(date: Date | string | null | undefined): string {
   return `${year}-${month}-${day}`;
 }
 
-export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], currentUserRole = "member", onClose, onUpdate, onDelete, onMovedAway }: Props) {
+export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], currentUserRole = "member", onClose, onUpdate, onDelete, onTransferred }: Props) {
   const { data: session } = useSession();
   const currentUserId = session?.user?.id ?? "";
   // Mesmas regras do servidor: o que alguém criou só ela (ou admin) edita/apaga; o
@@ -103,7 +102,7 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
   const [linkedBoards, setLinkedBoards] = useState(card.linkedBoards ?? []);
   const [projectSearch, setProjectSearch] = useState("");
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
-  const [transferWorkspaceId, setTransferWorkspaceId] = useState("");
+  const [transferWorkspaceId, setTransferWorkspaceId] = useState(workspaceId);
   const [transferBoards, setTransferBoards] = useState<BoardOption[]>([]);
   const [transferBoardId, setTransferBoardId] = useState("");
   const [transferColumns, setTransferColumns] = useState<{ id: string; name: string }[]>([]);
@@ -118,9 +117,15 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
     }
     fetch(`/api/kanban/boards?workspaceId=${transferWorkspaceId}`)
       .then((res) => res.json())
-      .then((json) => setTransferBoards((json.data ?? []).map((b: BoardOption) => ({ id: b.id, name: b.name, color: b.color }))))
+      .then((json) =>
+        setTransferBoards(
+          (json.data ?? [])
+            .filter((b: BoardOption) => b.id !== card.boardId)
+            .map((b: BoardOption) => ({ id: b.id, name: b.name, color: b.color }))
+        )
+      )
       .catch(() => setTransferBoards([]));
-  }, [transferWorkspaceId]);
+  }, [transferWorkspaceId, card.boardId]);
 
   useEffect(() => {
     if (!transferBoardId) {
@@ -155,13 +160,10 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Erro ao transferir");
 
-      if (mode === "move") {
-        toast.success("Tarefa movida para o outro workspace!");
-        onMovedAway?.();
-      } else {
-        toast.success("Tarefa copiada para o outro workspace!");
-      }
+      const boardName = transferBoards.find((b) => b.id === transferBoardId)?.name ?? "outro board";
+      toast.success(mode === "move" ? `Tarefa movida para "${boardName}"!` : `Tarefa copiada para "${boardName}"!`);
       onClose();
+      onTransferred?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao transferir tarefa");
     } finally {
@@ -657,14 +659,14 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                 </div>
               </div>
 
-              {/* Mover/copiar para outro workspace */}
-              {otherWorkspaces.length > 0 && canManage && (
+              {/* Mover/copiar para outro board (deste ou de outro workspace) */}
+              {canManage && (
                 <div>
                   <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
-                    Enviar para outro workspace
+                    Enviar para outro board
                   </label>
                   <div className="space-y-2">
-                    <select
+                    {otherWorkspaces.length > 0 && <select
                       value={transferWorkspaceId}
                       onChange={(e) => {
                         setTransferWorkspaceId(e.target.value);
@@ -673,11 +675,11 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                       }}
                       className="w-full h-9 px-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:border-primary transition-colors"
                     >
-                      <option value="">Escolher workspace…</option>
+                      <option value={workspaceId}>Este workspace</option>
                       {otherWorkspaces.map((w) => (
                         <option key={w.id} value={w.id}>{w.name}</option>
                       ))}
-                    </select>
+                    </select>}
 
                     {transferWorkspaceId && (
                       <select

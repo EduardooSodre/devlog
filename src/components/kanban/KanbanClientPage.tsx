@@ -36,16 +36,30 @@ const BOARD_COLORS = ["#4f6ef7", "#22d3ee", "#10b981", "#f59e0b", "#f97316", "#e
 
 interface Props {
   initialBoards: KanbanBoardWithColumns[];
+  initialBoardId?: string;
   workspaceId: string;
   otherWorkspaces?: { id: string; name: string }[];
   currentUserRole?: string;
 }
 
-export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces = [], currentUserRole = "member" }: Props) {
+export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, otherWorkspaces = [], currentUserRole = "member" }: Props) {
   const [boards, setBoards] = useState<KanbanBoardWithColumns[]>(initialBoards);
   const [activeBoard, setActiveBoard] = useState<KanbanBoardWithColumns | null>(
-    initialBoards[0] ?? null
+    initialBoards.find((b) => b.id === initialBoardId) ?? initialBoards[0] ?? null
   );
+
+  // Lembra o board aberto: na URL (F5 e link compartilhado voltam pra ele) e num cookie
+  // por workspace (voltar pelo menu lateral também abre o último usado).
+  const activeBoardId = activeBoard?.id;
+  useEffect(() => {
+    if (!activeBoardId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("board") !== activeBoardId) {
+      url.searchParams.set("board", activeBoardId);
+      window.history.replaceState(null, "", url);
+    }
+    document.cookie = `devlog_board_${workspaceId}=${activeBoardId}; path=/; max-age=31536000; samesite=lax`;
+  }, [activeBoardId, workspaceId]);
   const [selectedCard, setSelectedCard] = useState<KanbanCardWithDetails | null>(null);
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
@@ -90,22 +104,26 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
   // preservando a seleção. ponytail: real-time de verdade (WebSocket/Pusher/Ably) pede
   // um serviço externo — isso aqui é o suficiente pra ver mudanças de outra pessoa sem
   // dar F5, e nunca atropela um drag em andamento ou o modal de card aberto.
+  const reloadBoards = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/kanban/boards?workspaceId=${workspaceId}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const freshBoards: KanbanBoardWithColumns[] = json.data ?? [];
+      setBoards(freshBoards);
+      setActiveBoard((prev) => (prev ? freshBoards.find((b) => b.id === prev.id) ?? prev : freshBoards[0] ?? null));
+    } catch {
+      // silencioso — próxima tentativa em 15s
+    }
+  }, [workspaceId]);
+
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
       if (selectedCard || isDraggingRef.current) return;
-      try {
-        const res = await fetch(`/api/kanban/boards?workspaceId=${workspaceId}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        const freshBoards: KanbanBoardWithColumns[] = json.data ?? [];
-        setBoards(freshBoards);
-        setActiveBoard((prev) => (prev ? freshBoards.find((b) => b.id === prev.id) ?? prev : freshBoards[0] ?? null));
-      } catch {
-        // silencioso — próxima tentativa em 15s
-      }
+      reloadBoards();
     }, 15_000);
     return () => clearInterval(interval);
-  }, [workspaceId, selectedCard]);
+  }, [reloadBoards, selectedCard]);
 
   // "Minhas tarefas" se aplica em qualquer view; "Ocultar concluídas" só nas views de
   // planejamento (lista/cronograma/calendário) — no Painel a coluna Concluído é o
@@ -854,7 +872,7 @@ export function KanbanClientPage({ initialBoards, workspaceId, otherWorkspaces =
           onDelete={handleCardDelete}
           // Depois de MOVER pra outro workspace, o card some do board atual — mesmo
           // efeito local de uma exclusão (o card real continua existindo, só que lá).
-          onMovedAway={() => handleCardDelete(selectedCard.id, { skipServerDelete: true })}
+          onTransferred={reloadBoards}
         />
       )}
     </div>

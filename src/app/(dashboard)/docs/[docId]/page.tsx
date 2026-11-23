@@ -4,7 +4,7 @@ import { docEntries } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Edit, Calendar, Camera, Download } from "lucide-react";
+import { ArrowLeft, Edit, Calendar, Camera, Download, FileText } from "lucide-react";
 import { cn, formatDateTime, docTypeConfig } from "@/lib/utils";
 import { DeleteDocButton } from "@/components/docs/DeleteDocButton";
 
@@ -102,17 +102,7 @@ export default async function DocDetailPage({ params }: { params: Promise<{ docI
               ) : (
                 <div className="space-y-2">
                   {beforeImages.map((img) => (
-                    <a key={img.id} href={img.fileUrl} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img.fileUrl}
-                        alt={img.caption ?? img.fileName}
-                        className="w-full rounded-xl border border-border hover:opacity-90 transition-opacity"
-                      />
-                      {img.caption && (
-                        <p className="text-xs text-muted-foreground mt-1">{img.caption}</p>
-                      )}
-                    </a>
+                    <AttachmentLink key={img.id} att={img} />
                   ))}
                 </div>
               )}
@@ -128,17 +118,7 @@ export default async function DocDetailPage({ params }: { params: Promise<{ docI
               ) : (
                 <div className="space-y-2">
                   {afterImages.map((img) => (
-                    <a key={img.id} href={img.fileUrl} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img.fileUrl}
-                        alt={img.caption ?? img.fileName}
-                        className="w-full rounded-xl border border-border hover:opacity-90 transition-opacity"
-                      />
-                      {img.caption && (
-                        <p className="text-xs text-muted-foreground mt-1">{img.caption}</p>
-                      )}
-                    </a>
+                    <AttachmentLink key={img.id} att={img} />
                   ))}
                 </div>
               )}
@@ -160,17 +140,10 @@ export default async function DocDetailPage({ params }: { params: Promise<{ docI
       {/* Screenshots */}
       {screenshots.length > 0 && (
         <div className="mb-6">
-          <h2 className="text-sm font-semibold mb-3">Screenshots</h2>
+          <h2 className="text-sm font-semibold mb-3">Anexos</h2>
           <div className="grid grid-cols-2 gap-3">
             {screenshots.map((img) => (
-              <a key={img.id} href={img.fileUrl} target="_blank" rel="noreferrer" className="group">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.fileUrl}
-                  alt={img.fileName}
-                  className="w-full rounded-xl border border-border group-hover:border-primary/40 transition-colors"
-                />
-              </a>
+              <AttachmentLink key={img.id} att={img} />
             ))}
           </div>
         </div>
@@ -182,5 +155,28 @@ export default async function DocDetailPage({ params }: { params: Promise<{ docI
         <span className="font-mono">#{doc.id.slice(0, 8)}</span>
       </div>
     </div>
+  );
+}
+
+/** Imagem vira miniatura; qualquer outro arquivo (PDF, DOCX…) vira um link com ícone. */
+function AttachmentLink({ att }: { att: { fileUrl: string; fileName: string; caption: string | null; mimeType: string | null } }) {
+  const isImage = !att.mimeType || att.mimeType.startsWith("image/");
+  return (
+    <a href={att.fileUrl} target="_blank" rel="noreferrer" className="group block">
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={att.fileUrl}
+          alt={att.caption ?? att.fileName}
+          className="w-full rounded-xl border border-border group-hover:border-primary/40 transition-colors"
+        />
+      ) : (
+        <div className="flex items-center gap-2 p-3 rounded-xl border border-border bg-card group-hover:border-primary/40 transition-colors">
+          <FileText className="w-5 h-5 text-muted-foreground shrink-0" />
+          <span className="text-sm truncate">{att.fileName}</span>
+        </div>
+      )}
+      {att.caption && <p className="text-xs text-muted-foreground mt-1">{att.caption}</p>}
+    </a>
   );
 }

@@ -1,6 +1,6 @@
 /**
- * POST /api/kanban/cards/transfer — Move ou copia um card para um board de OUTRO
- * workspace (ex.: levar uma tarefa pessoal pra um workspace de empresa, ou vice-versa).
+ * POST /api/kanban/cards/transfer — Move ou copia um card para outro board, do mesmo
+ * workspace ou de outro (ex.: levar uma tarefa pessoal pra um workspace de empresa).
  * "move": o card sai de onde estava e passa a existir só no destino.
  * "copy": cria uma cópia no destino; o original continua intacto.
  */
@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { kanbanCards, kanbanBoards, kanbanColumns, cardSubtasks, cardBoards } from "@/lib/db/schema";
-import { eq, max } from "drizzle-orm";
+import { and, eq, max } from "drizzle-orm";
 import { z } from "zod";
 import { assertCardAccess, canAccessBoard, verifyWorkspaceAccess } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
   }
   const { card, board: sourceBoard } = access;
+  const sameWorkspace = sourceBoard.workspaceId === targetWorkspaceId;
 
   if (!(await verifyWorkspaceAccess(session.user.id, targetWorkspaceId))) {
     return NextResponse.json({ error: "Você não faz parte do workspace de destino" }, { status: 403 });
@@ -78,16 +79,24 @@ export async function POST(req: NextRequest) {
       .where(eq(kanbanCards.id, cardId))
       .returning();
 
-    // Vínculos de "também aparece no projeto X" apontavam pra boards do workspace
-    // antigo — sem sentido mantê-los depois que o card muda de workspace.
-    await db.delete(cardBoards).where(eq(cardBoards.cardId, cardId));
+    // Vínculos de "também aparece no projeto X": noutro workspace apontariam pra boards
+    // de lá, então saem todos; no mesmo workspace só sai o do board que virou o dono.
+    await db
+      .delete(cardBoards)
+      .where(
+        sameWorkspace
+          ? and(eq(cardBoards.cardId, cardId), eq(cardBoards.boardId, targetBoardId))
+          : eq(cardBoards.cardId, cardId)
+      );
 
     await logActivity({
       cardId,
       boardId: targetBoardId,
       actorId: session.user.id,
       type: "transferred",
-      message: `moveu esta tarefa de outro workspace para "${targetBoard.name}"`,
+      message: sameWorkspace
+        ? `moveu esta tarefa de "${sourceBoard.name}" para "${targetBoard.name}"`
+        : `moveu esta tarefa de outro workspace para "${targetBoard.name}"`,
     });
 
     return NextResponse.json({ success: true, data: moved });
@@ -135,7 +144,9 @@ export async function POST(req: NextRequest) {
     boardId: targetBoardId,
     actorId: session.user.id,
     type: "transferred",
-    message: `copiou esta tarefa de outro workspace ("${sourceBoard.name}")`,
+    message: sameWorkspace
+      ? `copiou esta tarefa do board "${sourceBoard.name}"`
+      : `copiou esta tarefa de outro workspace ("${sourceBoard.name}")`,
   });
 
   return NextResponse.json({ success: true, data: copy }, { status: 201 });

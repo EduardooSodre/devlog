@@ -73,6 +73,7 @@ export function EditDocForm({ doc }: Props) {
         previewUrl,
         type: imgType,
         fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
         uploading: true,
       };
       setImages((prev) => [...prev, tempEntry]);
@@ -88,7 +89,7 @@ export function EditDocForm({ doc }: Props) {
                   url: uploaded.url,
                   fileKey: uploaded.publicId,
                   fileSize: uploaded.bytes,
-                  mimeType: file.type,
+                  mimeType: file.type || "application/octet-stream",
                   uploading: false,
                 }
               : img
@@ -269,7 +270,7 @@ export function EditDocForm({ doc }: Props) {
                   <label className="flex flex-col items-center justify-center h-16 w-full cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
                     <Upload className="w-4 h-4 mb-1" />
                     <span className="text-xs">Adicionar Antes</span>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageAdd(e, "before")} />
+                    <input type="file" multiple className="hidden" onChange={(e) => handleImageAdd(e, "before")} />
                   </label>
                   {beforeImages.map((img, idx) => (
                     <ImagePreviewCard key={idx} img={img} onRemove={() => removeImage(images.indexOf(img))} />
@@ -286,7 +287,7 @@ export function EditDocForm({ doc }: Props) {
                   <label className="flex flex-col items-center justify-center h-16 w-full cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
                     <Upload className="w-4 h-4 mb-1" />
                     <span className="text-xs">Adicionar Depois</span>
-                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageAdd(e, "after")} />
+                    <input type="file" multiple className="hidden" onChange={(e) => handleImageAdd(e, "after")} />
                   </label>
                   {afterImages.map((img, idx) => (
                     <ImagePreviewCard key={idx} img={img} onRemove={() => removeImage(images.indexOf(img))} />
@@ -297,10 +298,10 @@ export function EditDocForm({ doc }: Props) {
           </div>
         )}
 
-        {/* Screenshots (all types) */}
+        {/* Anexos (all types) */}
         <div>
           <label className="text-sm font-medium mb-2 block">
-            Screenshots <span className="text-muted-foreground font-normal text-xs">(opcional)</span>
+            Anexos <span className="text-muted-foreground font-normal text-xs">(imagens, PDF, Word, Excel…)</span>
           </label>
           <div className="flex flex-wrap gap-2">
             {screenshots.map((img, idx) => (
@@ -308,7 +309,7 @@ export function EditDocForm({ doc }: Props) {
             ))}
             <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-xl cursor-pointer text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors">
               <Upload className="w-3.5 h-3.5" /> Adicionar
-              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleImageAdd(e, "screenshot")} />
+              <input type="file" multiple className="hidden" onChange={(e) => handleImageAdd(e, "screenshot")} />
             </label>
           </div>
         </div>
@@ -346,16 +347,23 @@ function ImagePreviewCard({
 }) {
   return (
     <div className={cn("relative group", small ? "w-16 h-16" : "w-full")}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={img.previewUrl || img.url}
-        alt="preview"
-        className={cn(
-          "rounded-lg object-cover border border-border",
-          small ? "w-16 h-16" : "w-full max-h-32 object-cover",
-          img.uploading && "opacity-50"
-        )}
-      />
+      {!img.mimeType || img.mimeType.startsWith("image/") ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={img.previewUrl || img.url}
+          alt="preview"
+          className={cn(
+            "rounded-lg object-cover border border-border",
+            small ? "w-16 h-16" : "w-full max-h-32 object-cover",
+            img.uploading && "opacity-50"
+          )}
+        />
+      ) : (
+        <div title={img.fileName} className={cn("rounded-lg border border-border flex items-center gap-1.5 bg-card text-xs text-muted-foreground", small ? "w-16 h-16 flex-col justify-center p-1" : "w-full p-2", img.uploading && "opacity-50")}>
+          <FileText className="w-4 h-4 shrink-0" />
+          <span className="truncate max-w-full">{img.fileName}</span>
+        </div>
+      )}
       {img.uploading && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="w-4 h-4 animate-spin text-primary" />

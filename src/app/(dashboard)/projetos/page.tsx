@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { kanbanBoards } from "@/lib/db/schema";
@@ -7,7 +8,7 @@ import { getActiveWorkspaceId, getUserWorkspaces, verifyWorkspaceAccess, getBoar
 
 export const metadata = { title: "Projetos" };
 
-export default async function ProjetosPage() {
+export default async function ProjetosPage({ searchParams }: { searchParams: Promise<{ board?: string }> }) {
   const session = await auth();
   const userId = session!.user.id;
   const workspaceId = await getActiveWorkspaceId(userId);
@@ -67,8 +68,16 @@ export default async function ProjetosPage() {
       })
     : [];
 
+  // Board aberto: o da URL (?board=) ou, sem ela, o último que a pessoa usou neste
+  // workspace (cookie gravado pelo client). Id que não está na lista
+  // (ex.: URL de outro workspace depois de trocar) é ignorado.
+  const boardIdFromUrl = (await searchParams).board;
+  const lastBoardId = workspaceId ? (await cookies()).get(`devlog_board_${workspaceId}`)?.value : undefined;
+  const initialBoardId = [boardIdFromUrl, lastBoardId].find((id) => boards.some((b) => b.id === id));
+
   return (
     <KanbanClientPage
+      initialBoardId={initialBoardId}
       initialBoards={boards as Parameters<typeof KanbanClientPage>[0]["initialBoards"]}
       workspaceId={workspaceId ?? ""}
       otherWorkspaces={otherWorkspaces}
