@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { checkUpload } from "@/lib/upload-policy";
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: "Arquivo não enviado" }, { status: 400 });
+    }
+
+    const rejection = checkUpload(file.name, file.type, file.size);
+    if (rejection) {
+      return NextResponse.json({ error: rejection }, { status: 400 });
     }
 
     // Monta o FormData para o Cloudinary com autenticação via API key + timestamp
