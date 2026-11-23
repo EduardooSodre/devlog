@@ -86,7 +86,7 @@ export function BoardCanvas({ children, className }: Props) {
     const node = target as HTMLElement | null;
     if (!node) return false;
     return !!node.closest(
-      "[data-no-pan], [data-rfd-draggable-id], [data-col-scroll], button, a, input, textarea, select, [role='button']"
+      "[data-no-pan], [data-rfd-drag-handle-draggable-id], [data-col-scroll], button, a, input, textarea, select, [role='button']"
     );
   }
 

@@ -17,7 +17,7 @@ import { assertCardAccess, canAccessBoard, canManageCard, canWorkOnCard, getMemb
 // Campos que mudam O QUE é a tarefa (só quem criou ou admin) vs. campos de andamento
 // (quem criou, admin ou o responsável — quem recebeu a tarefa precisa poder concluí-la).
 const MANAGE_FIELDS = ["title", "description", "priority", "difficulty", "startDate", "dueDate", "assignedToId", "visibility"] as const;
-const WORK_FIELDS = ["status", "completedAt", "completionNotes", "columnId", "order"] as const;
+const WORK_FIELDS = ["status", "completedAt", "completionNotes", "columnId", "order", "beforeId"] as const;
 import { todayInBrasilia } from "@/lib/date-brasilia";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -71,6 +71,10 @@ const updateCardSchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).optional(),
   columnId: z.string().optional(), // mover entre colunas
   order: z.number().optional(),
+  // Drag-and-drop: id do card que deve ficar logo DEPOIS do movido (null = fim da coluna).
+  // O servidor renumera a coluna inteira — gravar só o `order` do card movido deixava os
+  // vizinhos com ordens repetidas/antigas e o card "pulava" no próximo recarregamento.
+  beforeId: z.string().nullable().optional(),
   startDate: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   completionNotes: z.string().optional(),
@@ -238,6 +242,27 @@ export async function PATCH(req: NextRequest) {
       .set(updateData)
       .where(eq(kanbanCards.id, id))
       .returning();
+
+    if (updates.beforeId !== undefined) {
+      // Inclui cards privados que o usuário não vê — por isso posiciona por vizinho, não
+      // por índice. ponytail: um UPDATE por card que mudou de posição; batch se colunas
+      // passarem de centenas de cards.
+      const siblings = await db
+        .select({ id: kanbanCards.id, order: kanbanCards.order })
+        .from(kanbanCards)
+        .where(eq(kanbanCards.columnId, updated.columnId))
+        .orderBy(asc(kanbanCards.order), asc(kanbanCards.createdAt), asc(kanbanCards.id));
+      const ids = siblings.map((s) => s.id).filter((cid) => cid !== id);
+      const at = updates.beforeId ? ids.indexOf(updates.beforeId) : -1;
+      ids.splice(at === -1 ? ids.length : at, 0, id);
+      const currentOrder = new Map(siblings.map((s) => [s.id, s.order]));
+      await Promise.all(
+        ids.map((cid, i) =>
+          currentOrder.get(cid) === i ? null : db.update(kanbanCards).set({ order: i }).where(eq(kanbanCards.id, cid))
+        )
+      );
+      updated.order = ids.indexOf(id);
+    }
 
     if (updates.status && updates.status !== existing.status) {
       await logActivity({

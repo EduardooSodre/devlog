@@ -55,8 +55,11 @@ export async function GET(req: NextRequest) {
             cards: {
               // "private" só aparece pra quem criou ou é o responsável, mesmo com
               // acesso ao board — ver comentário na coluna `visibility` do schema.
-              where: (c, { eq, or }) =>
-                or(eq(c.visibility, "public"), eq(c.createdById, session.user.id), eq(c.assignedToId, session.user.id)),
+              where: (c, { eq, and, or }) =>
+                and(
+                  eq(c.isArchived, false),
+                  or(eq(c.visibility, "public"), eq(c.createdById, session.user.id), eq(c.assignedToId, session.user.id))
+                ),
               with: {
                 assignedTo: { columns: { id: true, name: true, image: true } },
                 createdBy: { columns: { id: true, name: true, image: true } },
@@ -73,7 +76,7 @@ export async function GET(req: NextRequest) {
                   with: { board: { columns: { id: true, name: true, color: true } } },
                 },
               },
-              orderBy: (c, { asc }) => [asc(c.order)],
+              orderBy: (c, { asc }) => [asc(c.order), asc(c.createdAt), asc(c.id)],
             },
           },
           orderBy: (cols, { asc }) => [asc(cols.order)],

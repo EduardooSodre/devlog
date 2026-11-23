@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { toast } from "sonner";
 import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock } from "lucide-react";
 import { api, errorMessage } from "@/lib/api-client";
@@ -255,49 +255,75 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
 
   const onDragEnd = useCallback(
     async (result: DropResult) => {
-      isDraggingRef.current = false;
-      if (!result.destination || !activeBoard) return;
-      const { source, destination, draggableId } = result;
-      if (source.droppableId === destination.droppableId && source.index === destination.index)
+      if (!result.destination || !activeBoard) {
+        isDraggingRef.current = false;
         return;
+      }
+      const { source, destination, draggableId } = result;
+      if (source.droppableId === destination.droppableId && source.index === destination.index) {
+        isDraggingRef.current = false;
+        return;
+      }
 
       // Optimistic update (guarda o estado anterior pra desfazer se o servidor recusar)
       const previousColumns = activeBoard.columns;
       const boardId = activeBoard.id;
+      const applyColumns = (cols: KanbanColumnWithCards[]) => {
+        setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, columns: cols } : b)));
+        setActiveBoard((prev) => (prev && prev.id === boardId ? { ...prev, columns: cols } : prev));
+      };
+
+      // ── Reordenar colunas ──
+      if (result.type === "COLUMN") {
+        const cols = [...activeBoard.columns];
+        const [moved] = cols.splice(source.index, 1);
+        cols.splice(destination.index, 0, moved);
+        const reordered = cols.map((c, i) => ({ ...c, order: i }));
+        applyColumns(reordered);
+        try {
+          await Promise.all(
+            cols.map((c, i) =>
+              c.order === i ? null : api("/api/kanban/columns", { method: "PATCH", json: { id: c.id, order: i } })
+            )
+          );
+        } catch (err) {
+          applyColumns(previousColumns);
+          toast.error(errorMessage(err, "Erro ao mover coluna"));
+        } finally {
+          isDraggingRef.current = false;
+        }
+        return;
+      }
+
       const newColumns = activeBoard.columns.map((col) => ({ ...col, cards: [...(col.cards ?? [])] }));
       const srcCol = newColumns.find((c) => c.id === source.droppableId)!;
       const dstCol = newColumns.find((c) => c.id === destination.droppableId)!;
 
       // Com "Minhas tarefas"/Filtrar ativos, o Painel arrasta sobre a lista FILTRADA —
-      // source.index/destination.index são posições nela, não na coluna real. Acha a
-      // posição real pelo id do card (o próprio ou o vizinho de destino) em vez de usar
-      // o índice cru contra o array cheio, senão o card pula pra posição errada.
-      const dstFiltered = boardColumns.find((c) => c.id === destination.droppableId)?.cards ?? [];
-      const realSrcIndex = srcCol.cards.findIndex((c) => c.id === draggableId);
-      const [movedCard] = srcCol.cards.splice(realSrcIndex, 1);
-      const neighbor = destination.index < dstFiltered.length ? dstFiltered[destination.index] : null;
-      const realDstIndex = neighbor ? dstCol.cards.findIndex((c) => c.id === neighbor.id) : dstCol.cards.length;
-      dstCol.cards.splice(realDstIndex === -1 ? dstCol.cards.length : realDstIndex, 0, movedCard);
-
-      setBoards((prev) =>
-        prev.map((b) => (b.id === activeBoard.id ? { ...b, columns: newColumns } : b))
+      // destination.index é posição nela, não na coluna real. Acha o vizinho de destino
+      // pelo id. destination.index já conta a lista SEM o card arrastado, então tira ele
+      // antes — senão, ao descer na mesma coluna, o card caía uma posição acima.
+      const dstVisible = (boardColumns.find((c) => c.id === destination.droppableId)?.cards ?? []).filter(
+        (c) => c.id !== draggableId
       );
-      setActiveBoard((prev) => (prev ? { ...prev, columns: newColumns } : prev));
+      const neighbor = dstVisible[destination.index] ?? null;
+      const [movedCard] = srcCol.cards.splice(srcCol.cards.findIndex((c) => c.id === draggableId), 1);
+      const realDstIndex = neighbor ? dstCol.cards.findIndex((c) => c.id === neighbor.id) : -1;
+      dstCol.cards.splice(realDstIndex === -1 ? dstCol.cards.length : realDstIndex, 0, movedCard);
+      applyColumns(newColumns);
 
-      // Persist
+      // Persist — o servidor renumera a coluna a partir do vizinho (beforeId).
       try {
         await api("/api/kanban/cards", {
           method: "PATCH",
-          json: {
-            id: draggableId,
-            columnId: destination.droppableId,
-            order: realDstIndex === -1 ? dstCol.cards.length - 1 : realDstIndex,
-          },
+          json: { id: draggableId, columnId: destination.droppableId, beforeId: neighbor?.id ?? null },
         });
       } catch (err) {
-        setBoards((prev) => prev.map((b) => (b.id === boardId ? { ...b, columns: previousColumns } : b)));
-        setActiveBoard((prev) => (prev && prev.id === boardId ? { ...prev, columns: previousColumns } : prev));
+        applyColumns(previousColumns);
         toast.error(errorMessage(err, "Erro ao mover card"));
+      } finally {
+        // Só libera o auto-reload depois de salvar — senão ele traz a ordem antiga de volta.
+        isDraggingRef.current = false;
       }
     },
     [activeBoard, boardColumns]
@@ -788,10 +814,23 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
       ) : (
         <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <BoardCanvas>
-          <div className="flex gap-6 p-6 h-full items-stretch w-max">
-            {boardColumns.map((column) => (
+          <div className="flex p-6 h-full items-stretch w-max">
+            <Droppable droppableId="board-columns" direction="horizontal" type="COLUMN">
+            {(colsDrop) => (
+            <div ref={colsDrop.innerRef} {...colsDrop.droppableProps} className="flex h-full items-stretch">
+            {boardColumns.map((column, colIndex) => (
+              <Draggable key={column.id} draggableId={`column-${column.id}`} index={colIndex} isDragDisabled={!canManageActiveBoard}>
+              {(colDrag, colSnap) => {
+                // Margem (não `gap`) entre colunas: o dnd mede margens, e `gap` faz a
+                // animação de soltar errar o lugar.
+                const colEl = (
+              <div
+                ref={colDrag.innerRef}
+                {...colDrag.draggableProps}
+                className={cn("h-full mr-6", colSnap.isDragging && "opacity-90 rotate-1")}
+              >
               <KanbanColumn
-                key={column.id}
+                dragHandleProps={colDrag.dragHandleProps}
                 column={column}
                 onCardClick={setSelectedCard}
                 onDeleteColumn={() => handleDeleteColumn(column.id)}
@@ -808,7 +847,18 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
                 canManageColumns={canManageActiveBoard}
                 canDragCard={canWorkOn}
               />
+              </div>
+                );
+                // Mesmo motivo do portal dos cards: o transform do BoardCanvas quebraria o
+                // position:fixed da coluna sendo arrastada.
+                return colSnap.isDragging ? createPortal(colEl, document.body) : colEl;
+              }}
+              </Draggable>
             ))}
+            {colsDrop.placeholder}
+            </div>
+            )}
+            </Droppable>
 
             {/* Add Column Button */}
             {canManageActiveBoard && (
@@ -893,9 +943,11 @@ interface ColumnProps {
   onDeleteColumn: () => void;
   canManageColumns: boolean;
   canDragCard: (card: KanbanCardWithDetails) => boolean;
+  dragHandleProps: DraggableProvidedDragHandleProps | null;
 }
 
 function KanbanColumn({
+  dragHandleProps,
   column,
   onCardClick,
   addingCard,
@@ -915,8 +967,12 @@ function KanbanColumn({
 
   return (
     <div className="flex flex-col w-72 shrink-0 h-full max-h-full">
-      {/* Column header */}
-      <div className="flex items-center justify-between mb-3 px-1 shrink-0">
+      {/* Column header — também é a alça pra arrastar a coluna (quem gerencia o board) */}
+      <div
+        {...dragHandleProps}
+        title={canManageColumns ? "Arraste para reordenar a coluna" : undefined}
+        className={cn("flex items-center justify-between mb-3 px-1 shrink-0", canManageColumns && "cursor-grab active:cursor-grabbing")}
+      >
         <div className="flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full"

@@ -43,7 +43,7 @@ export default async function ProjetosPage({ searchParams }: { searchParams: Pro
                     eq(c.isArchived, false),
                     or(eq(c.visibility, "public"), eq(c.createdById, userId), eq(c.assignedToId, userId))
                   ),
-                orderBy: (c, { asc }) => [asc(c.order)],
+                orderBy: (c, { asc }) => [asc(c.order), asc(c.createdAt), asc(c.id)],
                 with: {
                   attachments: true,
                   assignedTo: { columns: { id: true, name: true, image: true } },

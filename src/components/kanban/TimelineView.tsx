@@ -1,74 +1,76 @@
 "use client";
 
-import { useMemo } from "react";
-import { eachDayOfInterval, differenceInCalendarDays, format, isToday, isSameMonth, addDays, max as dateMax, min as dateMin } from "date-fns";
+import { useEffect, useMemo, useRef } from "react";
+import {
+  eachDayOfInterval,
+  differenceInCalendarDays,
+  format,
+  isSameMonth,
+  isWeekend,
+  addDays,
+  startOfDay,
+  max as dateMax,
+  min as dateMin,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { GanttChartSquare, UserCircle2 } from "lucide-react";
-import { cn, priorityConfig, difficultyConfig, initials } from "@/lib/utils";
+import { GanttChartSquare } from "lucide-react";
+import { cn, difficultyConfig, initials } from "@/lib/utils";
 import type { KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
-
-function Assignee({ card, className }: { card: KanbanCardWithDetails; className?: string }) {
-  if (!card.assignedTo) {
-    return (
-      <span className={cn("w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center shrink-0", className)} title="Sem responsável">
-        <UserCircle2 className="w-3 h-3 text-muted-foreground" />
-      </span>
-    );
-  }
-  return (
-    <span
-      title={card.assignedTo.name ?? undefined}
-      className={cn("w-5 h-5 rounded-full bg-primary/10 text-primary text-[9px] font-semibold flex items-center justify-center overflow-hidden shrink-0 ring-2 ring-card", className)}
-    >
-      {card.assignedTo.image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={card.assignedTo.image} alt="" className="w-full h-full object-cover" />
-      ) : (
-        initials(card.assignedTo.name || "?")
-      )}
-    </span>
-  );
-}
 
 interface Props {
   columns: KanbanColumnWithCards[];
   onCardClick: (card: KanbanCardWithDetails) => void;
 }
 
-const DAY_WIDTH = 48;
-const LABEL_WIDTH = 240;
-const ROW_HEIGHT = 52;
+const DAY_WIDTH = 36;
+const LABEL_WIDTH = 260;
+const ROW_HEIGHT = 36;
+const BAR_TEXT_MIN = 120; // abaixo disso o título vai do lado de fora da barra
+
+const fmt = (d: Date) => format(d, "dd MMM", { locale: ptBR });
 
 export function TimelineView({ columns, onCardClick }: Props) {
-  const rows = useMemo(
+  const today = startOfDay(new Date());
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Agrupa por coluna (A Fazer, Em Progresso…) — fica claro em que etapa cada tarefa está
+  // sem repetir o nome da coluna em toda linha.
+  const groups = useMemo(
     () =>
-      columns.flatMap((col) =>
-        (col.cards ?? []).map((c) => ({
-          card: c,
-          columnName: col.name,
-          start: new Date(c.startDate ?? c.createdAt),
-          end: c.dueDate ? new Date(c.dueDate) : addDays(new Date(c.startDate ?? c.createdAt), 1),
+      columns
+        .map((col) => ({
+          column: col,
+          rows: (col.cards ?? []).map((card) => {
+            const start = startOfDay(new Date(card.startDate ?? card.createdAt));
+            const due = card.dueDate ? startOfDay(new Date(card.dueDate)) : null;
+            return { card, start, due: due && due < start ? start : due };
+          }),
         }))
-      ),
+        .filter((g) => g.rows.length > 0),
     [columns]
   );
 
-  const { rangeStart, days } = useMemo(() => {
-    if (rows.length === 0) {
-      const start = addDays(new Date(), -2);
-      return { rangeStart: start, days: eachDayOfInterval({ start, end: addDays(start, 20) }) };
-    }
-    const earliest = dateMin(rows.map((r) => r.start));
-    const latest = dateMax(rows.map((r) => (r.end > r.start ? r.end : r.start)));
-    const start = addDays(earliest, -2);
-    const end = dateMax([addDays(start, 20), addDays(latest, 2)]);
-    return { rangeStart: start, days: eachDayOfInterval({ start, end }) };
-  }, [rows]);
+  const allRows = groups.flatMap((g) => g.rows);
 
-  const todayOffset = differenceInCalendarDays(new Date(), rangeStart);
+  const { rangeStart, days } = useMemo(() => {
+    const starts = allRows.map((r) => r.start);
+    const ends = allRows.map((r) => r.due ?? r.start);
+    const first = addDays(dateMin([today, ...starts]), -3);
+    const last = dateMax([addDays(first, 34), addDays(dateMax([today, ...ends]), 7)]);
+    return { rangeStart: first, days: eachDayOfInterval({ start: first, end: last }) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups]);
+
+  const todayOffset = differenceInCalendarDays(today, rangeStart);
   const gridWidth = days.length * DAY_WIDTH;
 
-  if (rows.length === 0) {
+  // Abre já mostrando "hoje" perto da esquerda, em vez do começo do intervalo.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = Math.max(0, (todayOffset - 3) * DAY_WIDTH);
+  }, [todayOffset]);
+
+  if (allRows.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 p-10 text-center">
         <GanttChartSquare className="w-8 h-8 text-muted-foreground" />
@@ -77,106 +79,181 @@ export function TimelineView({ columns, onCardClick }: Props) {
     );
   }
 
+  // Meses do cabeçalho: [rótulo, quantidade de dias]
+  const months: { label: string; span: number }[] = [];
+  days.forEach((d, i) => {
+    if (i === 0 || !isSameMonth(d, days[i - 1])) months.push({ label: format(d, "MMMM yyyy", { locale: ptBR }), span: 0 });
+    months[months.length - 1].span++;
+  });
+
   return (
-    <div className="p-6">
-      <div className="flex items-center gap-3 mb-3 px-1 flex-wrap">
-        <span className="text-[11px] text-muted-foreground">Cor da barra = dificuldade:</span>
+    <div className="p-6 flex flex-col min-h-0 flex-1">
+      {/* Legenda */}
+      <div className="flex items-center gap-x-4 gap-y-1 mb-3 px-1 flex-wrap text-[11px] text-muted-foreground">
         {(Object.keys(difficultyConfig) as (keyof typeof difficultyConfig)[]).map((key) => (
-          <span key={key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: difficultyConfig[key].hex }} />
+          <span key={key} className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: difficultyConfig[key].hex }} />
             {difficultyConfig[key].label}
           </span>
         ))}
       </div>
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <div style={{ width: LABEL_WIDTH + gridWidth, minWidth: "100%" }}>
-            {/* Header de dias */}
-            <div className="flex border-b border-border">
-              <div className="shrink-0 sticky left-0 z-20 bg-card border-r border-border" style={{ width: LABEL_WIDTH }} />
-              <div className="relative flex">
-                {days.map((day, i) => (
-                  <div
-                    key={day.toISOString()}
-                    style={{ width: DAY_WIDTH }}
-                    className={cn(
-                      "shrink-0 text-center py-2.5",
-                      i > 0 && !isSameMonth(day, days[i - 1]) && "border-l border-border/70"
-                    )}
-                  >
-                    <div className={cn("text-sm font-semibold", isToday(day) ? "text-primary" : "text-foreground/90")}>
-                      {format(day, "dd", { locale: ptBR })}
-                    </div>
-                    <div className="text-[10px] uppercase text-muted-foreground mt-0.5">
-                      {format(day, "EEEEE", { locale: ptBR })}
-                    </div>
+
+      <div className="border border-border rounded-xl overflow-hidden min-h-0 flex flex-col">
+        <div ref={scrollRef} className="overflow-auto min-h-0">
+          <div className="relative" style={{ width: LABEL_WIDTH + gridWidth }}>
+            {/* ── Cabeçalho (meses + dias), fixo no topo ── */}
+            <div className="sticky top-0 z-30 bg-background border-b border-border">
+              <div className="flex">
+                <div className="shrink-0 sticky left-0 z-10 bg-background border-r border-border" style={{ width: LABEL_WIDTH }} />
+                <div>
+                  <div className="flex">
+                    {months.map((m, i) => (
+                      <div
+                        key={i}
+                        style={{ width: m.span * DAY_WIDTH }}
+                        className="shrink-0 pt-2 text-[11px] capitalize text-muted-foreground"
+                      >
+                        {/* sticky: o nome do mês continua visível ao rolar pro meio dele */}
+                        <span className="sticky px-2 whitespace-nowrap" style={{ left: LABEL_WIDTH }}>
+                          {m.label}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  <div className="flex">
+                    {days.map((day, i) => (
+                      <div
+                        key={day.toISOString()}
+                        style={{ width: DAY_WIDTH }}
+                        className={cn(
+                          "shrink-0 text-center py-1.5 text-[11px] tabular-nums",
+                          i === todayOffset
+                            ? "text-primary font-semibold"
+                            : isWeekend(day)
+                              ? "text-muted-foreground/50"
+                              : "text-muted-foreground"
+                        )}
+                        title={format(day, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                      >
+                        {format(day, "dd")}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Linhas de tarefas */}
+            {/* ── Corpo ── */}
             <div className="relative">
-              {/* Linha vertical do "hoje" */}
+              {/* Fundo: fim de semana levemente sombreado + linha fina no dia de hoje */}
+              <div className="absolute inset-y-0 flex pointer-events-none" style={{ left: LABEL_WIDTH }}>
+                {days.map((day) => (
+                  <div
+                    key={day.toISOString()}
+                    style={{ width: DAY_WIDTH }}
+                    className={cn("shrink-0 h-full", isWeekend(day) && "bg-foreground/[0.025]")}
+                  />
+                ))}
+              </div>
               {todayOffset >= 0 && todayOffset < days.length && (
                 <div
-                  className="absolute top-0 bottom-0 w-px bg-primary/50 z-10"
+                  className="absolute inset-y-0 w-px bg-primary/50 pointer-events-none z-10"
                   style={{ left: LABEL_WIDTH + todayOffset * DAY_WIDTH + DAY_WIDTH / 2 }}
                 />
               )}
 
-              {rows.map(({ card, columnName, start, end }, idx) => {
-                const offset = Math.max(0, differenceInCalendarDays(start, rangeStart));
-                const span = Math.max(1, differenceInCalendarDays(end, start) + 1);
-                const barWidth = span * DAY_WIDTH - 8;
-                const tooShort = barWidth < 90;
-                const tooNarrowForAvatar = barWidth < 56;
-                const difficultyColor = difficultyConfig[card.difficulty].hex;
-
-                return (
-                  <div
-                    key={card.id}
-                    className={cn("flex items-center", idx % 2 === 1 && "bg-background/40")}
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    <div
-                      className="shrink-0 sticky left-0 z-20 bg-card border-r border-border px-3.5 h-full flex items-center gap-2.5"
-                      style={{ width: LABEL_WIDTH }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{card.title}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">{columnName}</p>
-                      </div>
-                      <Assignee card={card} />
-                    </div>
-                    <div className="relative h-full" style={{ width: gridWidth }}>
-                      <button
-                        onClick={() => onCardClick(card)}
-                        style={{
-                          left: offset * DAY_WIDTH + 4,
-                          width: barWidth,
-                          background: `linear-gradient(135deg, ${difficultyColor}, ${difficultyColor}cc)`,
-                        }}
-                        className={cn(
-                          "absolute top-1/2 -translate-y-1/2 h-8 rounded-full text-[11px] font-medium text-white flex items-center gap-1.5 shadow-md ring-1 ring-black/5 transition-transform hover:scale-[1.03] hover:shadow-lg",
-                          tooNarrowForAvatar ? "justify-center px-1.5" : "pl-1 pr-2.5"
-                        )}
-                        title={`${card.title} · ${difficultyConfig[card.difficulty].label}${card.assignedTo?.name ? " · " + card.assignedTo.name : ""}`}
-                      >
-                        {tooNarrowForAvatar ? (
-                          <span className={cn("w-2 h-2 rounded-full shrink-0 ring-1 ring-white/40", priorityConfig[card.priority].dot)} />
-                        ) : (
-                          <>
-                            <Assignee card={card} className="w-6 h-6 text-[10px]" />
-                            {!tooShort && <span className="truncate">{card.title}</span>}
-                            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0 ring-1 ring-white/40 ml-auto", priorityConfig[card.priority].dot)} />
-                          </>
-                        )}
-                      </button>
+              {groups.map(({ column, rows }) => (
+                <div key={column.id}>
+                  {/* Cabeçalho do grupo (coluna do board) */}
+                  <div className="relative flex h-8">
+                    <div className="sticky left-0 z-20 h-full flex items-end pb-1 px-4 bg-background border-r border-border text-[11px] font-medium text-muted-foreground" style={{ width: LABEL_WIDTH }}>
+                      {column.name}
+                      <span className="ml-1.5 text-muted-foreground/50">{rows.length}</span>
                     </div>
                   </div>
-                );
-              })}
+
+                  {rows.map(({ card, start, due }) => {
+                    const offset = differenceInCalendarDays(start, rangeStart);
+                    const span = due ? differenceInCalendarDays(due, start) + 1 : 1;
+                    const barWidth = span * DAY_WIDTH - 4;
+                    const textInside = !!due && barWidth >= BAR_TEXT_MIN;
+                    const done = card.status === "done";
+                    const overdue = !!due && due < today && !done;
+                    const color = difficultyConfig[card.difficulty].hex;
+                    const range = due
+                      ? span === 1
+                        ? fmt(start)
+                        : `${fmt(start)} – ${fmt(due)}`
+                      : "Sem prazo";
+
+                    return (
+                      <div
+                        key={card.id}
+                        className="relative flex items-center hover:bg-muted/30 cursor-pointer group"
+                        style={{ height: ROW_HEIGHT }}
+                        onClick={() => onCardClick(card)}
+                      >
+                        {/* Rótulo fixo à esquerda */}
+                        <div
+                          className="sticky left-0 z-20 h-full bg-background group-hover:bg-muted border-r border-border px-4 flex items-center gap-3"
+                          style={{ width: LABEL_WIDTH }}
+                        >
+                          <p className={cn("flex-1 min-w-0 text-[13px] truncate", done && "line-through text-muted-foreground")} title={card.title}>
+                            {card.title}
+                          </p>
+                          {due && (
+                            <span className={cn("text-[11px] shrink-0 tabular-nums", overdue ? "text-red-400" : "text-muted-foreground")}>
+                              {overdue ? "Atrasada" : range}
+                            </span>
+                          )}
+                          {card.assignedTo && (
+                            <span
+                              title={card.assignedTo.name ?? undefined}
+                              className="w-5 h-5 rounded-full bg-muted text-muted-foreground text-[9px] font-medium flex items-center justify-center overflow-hidden shrink-0"
+                            >
+                              {card.assignedTo.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={card.assignedTo.image} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                initials(card.assignedTo.name || "?")
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Barra (com prazo) ou ponto (sem prazo) */}
+                        <div className="relative h-full" style={{ width: gridWidth }}>
+                          <div
+                            className={cn("absolute top-1/2 -translate-y-1/2 flex items-center", done && "opacity-40")}
+                            style={{ left: offset * DAY_WIDTH + 2 }}
+                            title={`${card.title} · ${range} · ${difficultyConfig[card.difficulty].label}`}
+                          >
+                            {due ? (
+                              <div
+                                className="h-5 rounded flex items-center px-2 text-[11px] text-foreground"
+                                style={{
+                                  width: barWidth,
+                                  background: `${color}33`,
+                                  boxShadow: `inset 2px 0 0 ${overdue ? "#f87171" : color}`,
+                                }}
+                              >
+                                {textInside && <span className="truncate">{card.title}</span>}
+                              </div>
+                            ) : (
+                              <span className="w-2 h-2 rounded-full ml-[12px]" style={{ background: color }} />
+                            )}
+                            {!textInside && (
+                              <span className="ml-2 text-[11px] text-muted-foreground whitespace-nowrap max-w-[220px] truncate">
+                                {card.title}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
