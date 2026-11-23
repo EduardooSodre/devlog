@@ -13,7 +13,7 @@ import {
   departmentMembers,
   boardMembers,
 } from "@/lib/db/schema";
-import { eq, and, count, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { eq, and, count, sql, inArray, isNull, or, type SQL, type Column } from "drizzle-orm";
 import { getPlanConfig, isWithinLimit, type PlanId } from "@/lib/plans";
 import { isTrialExpired } from "@/lib/org-domain";
 import { isCardVisibleTo } from "@/lib/card-visibility";
@@ -108,6 +108,46 @@ export async function canAccessBoard(
     ),
   });
   return !!inDept;
+}
+
+/**
+ * Mesma regra de `canAccessBoard`, mas em SQL e para MUITOS usuários de uma vez: condição
+ * "o usuário na coluna `userCol` enxerga este board". Vira subqueries dentro da query de
+ * quem chama — zero round-trips extras. Se mudar a regra lá em cima, mude aqui também.
+ */
+export function boardAccessCondition(
+  userCol: Column,
+  board: { id: string; workspaceId: string; departmentId: string | null; isPersonal: boolean; createdById: string }
+): SQL {
+  const wsMembers = (roles?: string[]) =>
+    db
+      .select({ id: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        roles
+          ? and(eq(workspaceMembers.workspaceId, board.workspaceId), inArray(workspaceMembers.role, roles as ("owner" | "admin")[]))
+          : eq(workspaceMembers.workspaceId, board.workspaceId)
+      );
+
+  const isMember = inArray(userCol, wsMembers());
+  const direct = or(
+    eq(userCol, board.createdById),
+    inArray(userCol, db.select({ id: boardMembers.userId }).from(boardMembers).where(eq(boardMembers.boardId, board.id)))
+  )!;
+
+  if (board.isPersonal) return and(isMember, direct)!;
+  if (!board.departmentId) return isMember;
+  return and(
+    isMember,
+    or(
+      direct,
+      inArray(userCol, wsMembers(["owner", "admin"])),
+      inArray(
+        userCol,
+        db.select({ id: departmentMembers.userId }).from(departmentMembers).where(eq(departmentMembers.departmentId, board.departmentId))
+      )
+    )
+  )!;
 }
 
 /** Acesso ao board E permissão de gerenciá-lo (criador ou owner/admin). */

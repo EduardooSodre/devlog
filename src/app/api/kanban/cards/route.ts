@@ -7,12 +7,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { kanbanCards, kanbanBoards, kanbanColumns, workspaceMembers } from "@/lib/db/schema";
+import { kanbanCards, kanbanBoards, kanbanColumns } from "@/lib/db/schema";
 import { eq, asc, and, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { notifyUser } from "@/lib/notify";
 import { logActivity } from "@/lib/activity";
-import { assertCardAccess, canAccessBoard, canManageCard, canWorkOnCard, getMemberRole } from "@/lib/workspace";
+import { assertCardAccess, boardAccessCondition, canAccessBoard, canManageCard, canWorkOnCard, getMemberRole } from "@/lib/workspace";
 
 // Campos que mudam O QUE é a tarefa (só quem criou ou admin) vs. campos de andamento
 // (quem criou, admin ou o responsável — quem recebeu a tarefa precisa poder concluí-la).
@@ -245,26 +245,22 @@ export async function PATCH(req: NextRequest) {
 
     // Cópias vinculadas (sourceCardId) acompanham o conteúdo do original. Só roda quando
     // algum desses campos mudou, e é UM update por índice — sem cópias, não toca em nada.
-    // Só alimenta cópias de quem AINDA enxerga o original: membro do workspace dele (e, se
-    // o original for privado, só criador/responsável). Quem perdeu acesso para de receber.
-    // ponytail: não reavalia boards restritos a departamento — adicionar se isso importar.
+    // Só alimenta cópias de quem AINDA enxerga o original, com a mesma regra do resto do
+    // app (assertCardAccess): acesso ao board dele (workspace, board pessoal, departamento)
+    // e, se o original for privado, ser criador/responsável. Tudo em subqueries do mesmo
+    // UPDATE. Quem perdeu acesso simplesmente para de receber.
     const SYNCED = ["title", "description", "priority", "difficulty", "startDate", "dueDate"] as const;
     const synced = Object.fromEntries(SYNCED.filter((f) => f in updateData).map((f) => [f, updateData[f]]));
     if (Object.keys(synced).length > 0) {
-      const allowedCopiers =
+      const copier = kanbanCards.createdById;
+      const canSeeCard =
         updated.visibility === "private"
-          ? inArray(kanbanCards.createdById, [updated.createdById, updated.assignedToId].filter((v): v is string => !!v))
-          : inArray(
-              kanbanCards.createdById,
-              db
-                .select({ id: workspaceMembers.userId })
-                .from(workspaceMembers)
-                .where(eq(workspaceMembers.workspaceId, access.board.workspaceId))
-            );
+          ? inArray(copier, [updated.createdById, updated.assignedToId].filter((v): v is string => !!v))
+          : undefined;
       await db
         .update(kanbanCards)
         .set({ ...synced, updatedAt: new Date() })
-        .where(and(eq(kanbanCards.sourceCardId, id), allowedCopiers));
+        .where(and(eq(kanbanCards.sourceCardId, id), boardAccessCondition(copier, access.board), canSeeCard));
     }
 
     if (updates.beforeId !== undefined) {
