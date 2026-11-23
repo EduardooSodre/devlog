@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable, type DropResult, type DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { toast } from "sonner";
-import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock } from "lucide-react";
+import { Plus, MoreHorizontal, X, Loader2, Kanban, Settings, Trash2, Check, Palette, ChevronDown, LayoutGrid, List as ListIcon, CalendarDays, Paperclip, GanttChartSquare, MessageSquare, UserCircle2, EyeOff, Archive, Lock, Pencil } from "lucide-react";
 import { api, errorMessage } from "@/lib/api-client";
 import { cn, priorityConfig, difficultyConfig, formatDate, initials } from "@/lib/utils";
 import type { KanbanBoardWithColumns, KanbanCardWithDetails, KanbanColumnWithCards } from "@/types";
@@ -80,7 +80,6 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
   const [editingBoard, setEditingBoard] = useState(false);
   const [editBoardName, setEditBoardName] = useState("");
   const [editBoardColor, setEditBoardColor] = useState("");
-  const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [creatingColumn, setCreatingColumn] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   // Trava duplo envio (Enter repetido / clique duplo) na criação de board e coluna.
@@ -420,6 +419,25 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
       toast.success("Coluna excluída");
     } catch (err) {
       toast.error(errorMessage(err, "Erro ao excluir coluna"));
+    }
+  }
+
+  /** true se salvou — no erro o editor continua aberto com o que foi digitado. */
+  async function handleUpdateColumn(columnId: string, updates: { name: string; color: string }): Promise<boolean> {
+    if (!activeBoard) return false;
+    try {
+      await api("/api/kanban/columns", { method: "PATCH", json: { id: columnId, ...updates } });
+      const updatedBoard = {
+        ...activeBoard,
+        columns: activeBoard.columns.map((c) => (c.id === columnId ? { ...c, ...updates } : c)),
+      };
+      setBoards((prev) => prev.map((b) => (b.id === activeBoard.id ? updatedBoard : b)));
+      setActiveBoard(updatedBoard);
+      toast.success("Coluna atualizada");
+      return true;
+    } catch (err) {
+      toast.error(errorMessage(err, "Erro ao editar coluna"));
+      return false;
     }
   }
 
@@ -834,6 +852,7 @@ export function KanbanClientPage({ initialBoards, initialBoardId, workspaceId, o
                 column={column}
                 onCardClick={setSelectedCard}
                 onDeleteColumn={() => handleDeleteColumn(column.id)}
+                onUpdateColumn={(updates) => handleUpdateColumn(column.id, updates)}
                 addingCard={addingCardToColumn === column.id}
                 onStartAdd={() => setAddingCardToColumn(column.id)}
                 onCancelAdd={() => {
@@ -941,6 +960,7 @@ interface ColumnProps {
   onCreateCard: () => void;
   loadingCard: boolean;
   onDeleteColumn: () => void;
+  onUpdateColumn: (updates: { name: string; color: string }) => Promise<boolean>;
   canManageColumns: boolean;
   canDragCard: (card: KanbanCardWithDetails) => boolean;
   dragHandleProps: DraggableProvidedDragHandleProps | null;
@@ -958,10 +978,23 @@ function KanbanColumn({
   onCreateCard,
   loadingCard,
   onDeleteColumn,
+  onUpdateColumn,
   canManageColumns,
   canDragCard,
 }: ColumnProps) {
   const [showColumnActions, setShowColumnActions] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  async function saveEdit() {
+    if (!editName.trim() || savingEdit) return;
+    setSavingEdit(true);
+    const ok = await onUpdateColumn({ name: editName.trim(), color: editColor });
+    setSavingEdit(false);
+    if (ok) setEditing(false);
+  }
   const cards = column.cards ?? [];
   const doneCount = cards.filter((c) => c.status === "done").length;
 
@@ -971,8 +1004,53 @@ function KanbanColumn({
       <div
         {...dragHandleProps}
         title={canManageColumns ? "Arraste para reordenar a coluna" : undefined}
-        className={cn("flex items-center justify-between mb-3 px-1 shrink-0", canManageColumns && "cursor-grab active:cursor-grabbing")}
+        className={cn("flex items-center justify-between mb-3 px-1 shrink-0", canManageColumns && !editing && "cursor-grab active:cursor-grabbing")}
       >
+        {editing ? (
+          <div className="w-full bg-card border border-primary/40 rounded-xl p-3 cursor-default">
+            <input
+              autoFocus
+              value={editName}
+              maxLength={50}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveEdit();
+                if (e.key === "Escape") setEditing(false);
+              }}
+              placeholder="Nome da coluna…"
+              className="w-full h-9 bg-background border border-border rounded-lg px-3 text-sm focus:outline-none focus:border-primary transition-colors"
+            />
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {BOARD_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setEditColor(c)}
+                  aria-label={`Cor ${c}`}
+                  className={cn("w-5 h-5 rounded-full transition-transform hover:scale-110", editColor === c && "ring-2 ring-offset-2 ring-offset-card ring-foreground/60")}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={saveEdit}
+                disabled={savingEdit || !editName.trim()}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-primary text-white text-xs font-semibold py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {savingEdit && <Loader2 className="w-3 h-3 animate-spin" />}
+                Salvar
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full"
@@ -1008,6 +1086,17 @@ function KanbanColumn({
                 <div className="absolute right-0 mt-2 w-40 bg-card border border-border rounded-xl shadow-xl z-50 p-1 animate-in fade-in zoom-in duration-200">
                   <button
                     onClick={() => {
+                      setEditName(column.name);
+                      setEditColor(column.color ?? BOARD_COLORS[0]);
+                      setEditing(true);
+                      setShowColumnActions(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-background rounded-lg transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Editar Coluna
+                  </button>
+                  <button
+                    onClick={() => {
                       onDeleteColumn();
                       setShowColumnActions(false);
                     }}
@@ -1021,6 +1110,8 @@ function KanbanColumn({
           </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Progress bar */}

@@ -126,7 +126,8 @@ export function TimelineView({ columns, onCardClick }: Props) {
                         key={day.toISOString()}
                         style={{ width: DAY_WIDTH }}
                         className={cn(
-                          "shrink-0 text-center py-1.5 text-[11px] tabular-nums",
+                          "shrink-0 text-center py-1.5 text-[11px] tabular-nums border-l",
+                          i > 0 && !isSameMonth(day, days[i - 1]) ? "border-foreground/30" : "border-foreground/[0.12]",
                           i === todayOffset
                             ? "text-primary font-semibold"
                             : isWeekend(day)
@@ -147,11 +148,16 @@ export function TimelineView({ columns, onCardClick }: Props) {
             <div className="relative">
               {/* Fundo: fim de semana levemente sombreado + linha fina no dia de hoje */}
               <div className="absolute inset-y-0 flex pointer-events-none" style={{ left: LABEL_WIDTH }}>
-                {days.map((day) => (
+                {days.map((day, i) => (
                   <div
                     key={day.toISOString()}
                     style={{ width: DAY_WIDTH }}
-                    className={cn("shrink-0 h-full", isWeekend(day) && "bg-foreground/[0.025]")}
+                    className={cn(
+                      "shrink-0 h-full border-l",
+                      // Linha fina entre dias; mais marcada na virada do mês.
+                      i > 0 && !isSameMonth(day, days[i - 1]) ? "border-foreground/30" : "border-foreground/[0.12]",
+                      isWeekend(day) && "bg-foreground/[0.025]"
+                    )}
                   />
                 ))}
               </div>

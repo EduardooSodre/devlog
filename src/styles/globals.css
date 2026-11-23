@@ -99,6 +99,16 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
+  /* Hover no tema claro: bg-card (branco) e bg-background (98%) são quase iguais no
+     claro, então os ~25 botões que usam isso como hover ficavam sem retorno visual
+     ao passar o mouse. No escuro a diferença já aparece. */
+  .light .hover\:bg-card:hover,
+  .light .hover\:bg-card\/60:hover,
+  .light .hover\:bg-background:hover,
+  .light .hover\:bg-muted\/30:hover {
+    background-color: hsl(220 16% 92%);
+  }
+
   /* Scrollbar customizada */
   ::-webkit-scrollbar {
     width: 6px;
