@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
     // A string a assinar deve conter TODOS os parâmetros em ordem alfabética,
     // seguidos do API Secret (sem separador).
     // Parâmetros: folder, timestamp (em ordem alfabética: f < t)
-    const strToSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+    // use_filename mantém o nome (e a extensão, em arquivos raw) para o download
+    const strToSign = `folder=${folder}&timestamp=${timestamp}&unique_filename=true&use_filename=true${apiSecret}`;
     const signature = await sha1(strToSign);
 
     const cloudFormData = new FormData();
@@ -46,9 +47,19 @@ export async function POST(req: NextRequest) {
     cloudFormData.append("timestamp", timestamp);
     cloudFormData.append("signature", signature);
     cloudFormData.append("folder", folder);
+    cloudFormData.append("unique_filename", "true");
+    cloudFormData.append("use_filename", "true");
+
+    // Imagens e vídeos/áudios nos tipos próprios; PDF, DOCX, XLSX, ZIP etc. como raw
+    // (raw também evita o bloqueio de entrega de PDF/ZIP das contas Cloudinary)
+    const resourceType = file.type.startsWith("image/")
+      ? "image"
+      : file.type.startsWith("video/") || file.type.startsWith("audio/")
+        ? "video"
+        : "raw";
 
     const cloudRes = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
       { method: "POST", body: cloudFormData }
     );
 

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   X, CheckCircle2, Circle, Clock, Flag, Paperclip,
   MessageSquare, Loader2, ChevronDown, Upload, Trash2, Plus,
-  Lock, Globe, Kanban, Search, CalendarDays, UserCircle2, History,
+  Lock, Globe, Kanban, Search, CalendarDays, UserCircle2, History, FileText,
 } from "lucide-react";
 import { cn, priorityConfig, difficultyConfig, formatDate, formatDateTime, initials } from "@/lib/utils";
 import type { CardSubtaskWithDetails, KanbanCardWithDetails } from "@/types";
@@ -199,14 +199,14 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
       const { data } = await api<{ data: any }>("/api/kanban/cards/attachments", { method: "POST", json: {
           cardId: card.id,
           type: "screenshot",
-          fileName: uploaded.originalFilename || file.name,
+          fileName: file.name,
           fileUrl: uploaded.url,
           fileKey: uploaded.publicId,
           fileSize: uploaded.bytes,
-          mimeType: file.type,
+          mimeType: file.type || "application/octet-stream",
         } });
       setAttachments((prev) => [...prev, data]);
-      toast.success("Imagem anexada!");
+      toast.success("Arquivo anexado!");
     } catch (err) {
       console.error(err);
       toast.error(errorMessage(err, "Erro no upload"));
@@ -867,13 +867,12 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                     <div className="p-2 bg-primary/10 rounded-full">
                       <Upload className="w-5 h-5 text-primary" />
                     </div>
-                    <span className="text-sm font-medium">Clique para anexar imagem</span>
-                    <span className="text-xs text-muted-foreground">PNG, JPG, WebP</span>
+                    <span className="text-sm font-medium">Clique para anexar arquivo</span>
+                    <span className="text-xs text-muted-foreground">Imagens, PDF, Word, Excel, PowerPoint, ZIP, vídeo…</span>
                   </>
                 )}
                 <input
                   type="file"
-                  accept="image/*"
                   className="hidden"
                   disabled={uploading}
                   onChange={handleFileUpload}
@@ -892,17 +891,22 @@ export function CardModal({ card, workspaceId, allBoards, otherWorkspaces = [], 
                       key={att.id}
                       className="flex items-center gap-3 p-3 bg-background border border-border rounded-xl"
                     >
-                      {/* Preview da imagem */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={att.fileUrl}
-                        alt={att.fileName}
-                        className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0"
-                      />
+                      {att.mimeType?.startsWith("image/") ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={att.fileUrl}
+                          alt={att.fileName}
+                          className="w-12 h-12 rounded-lg object-cover border border-border flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg border border-border flex-shrink-0 flex items-center justify-center bg-muted">
+                          <FileText className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{att.fileName}</p>
                         <p className="text-xs text-muted-foreground">
-                          {att.type === "before" ? "📸 Antes" : att.type === "after" ? "📸 Depois" : "📎 Screenshot"}
+                          {att.type === "before" ? "📸 Antes" : att.type === "after" ? "📸 Depois" : att.mimeType?.startsWith("image/") ? "📎 Screenshot" : "📎 Arquivo"}
                         </p>
                       </div>
                       <a
